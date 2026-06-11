@@ -5,63 +5,87 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run the full pipeline (requires OPENROUTER_API_KEY env var)
-python -m src.main
+# Install runtime dependencies.
+python -m pip install -r requirements.txt
 
-# Skip the expensive DeepResearch stage
+# Install the test runner. It is not listed in requirements.txt.
+python -m pip install pytest
+
+# Run the full pipeline. Requires OPENROUTER_API_KEY.
+python -m src.main
+python -m src
+
+# Skip the expensive DeepResearch stage.
 SKIP_DEEP_RESEARCH=1 python -m src.main
 
-# Override report date (default: today)
+# Override report date. The default is today's UTC date.
 REPORT_DATE=2026-03-28 python -m src.main
 
-# Run tests
-pytest tests/ -v
+# Prevent the in-process CI git push path if GITHUB_ACTIONS is set.
+SKIP_GIT_PUSH=1 python -m src.main
+
+# Run all tests.
+python -m pytest tests/ -v
+
+# Run one test file or one test case.
+python -m pytest tests/test_fetcher.py -v
+python -m pytest tests/test_relevance_filter.py::test_parse_failure_defaults_to_peripheral -v
 ```
+
+On PowerShell, set runtime flags with `$env:NAME = 'value'`, then run `python -m src.main`. There is no configured build or lint command in this repository.
 
 ## Architecture
 
-Fully automated arXiv paper discovery pipeline for three research directions: Embodied AI, World Models, Autonomous Driving. Runs daily via GitHub Actions cron (UTC 05:30 weekdays).
+This repository is a fully automated arXiv paper discovery pipeline for Embodied AI, World Models, and Autonomous Driving. The scheduled GitHub Actions workflow runs on weekdays at UTC 05:30.
 
-**Pipeline flow** (sequential, in `src/main.py::run_pipeline()`):
+The pipeline is sequentially orchestrated by `src/main.py::run_pipeline()`:
 
+```text
+Fetch API and RSS -> Dedup -> Relevance Filter -> Deep Analysis -> PDF Download
+  -> DeepResearch for core papers -> Report -> Email -> Data commit and push
 ```
-Fetch (API+RSS) → Dedup → Relevance Filter → Deep Analysis → PDF Download
-  → DeepResearch (core papers only) → Report → Email → Git Push
-```
 
-**Key design decisions:**
+### Pipeline stages
 
-- **Hybrid fetch**: arXiv API (keyword search) + RSS feeds (announce type metadata) combined for both precision and recency
-- **3-tier relevance**: LLM classifies papers as `core` / `peripheral` / `not_relevant`. Only core papers get DeepResearch (expensive). Both core and peripheral get Deep Analysis
-- **PDF via base64**: PDFs are downloaded locally and base64-encoded before sending to OpenRouter, avoiding server-side URL fetch failures (502s). Files >15MB degrade from `native` to `pdf-text` engine
-- **Concurrency**: `asyncio.Semaphore` limits parallel LLM calls (`max_concurrent_llm=10`) and PDF processing (`max_concurrent_pdf=5`)
-- **Fail-safe**: Every LLM stage has fallback defaults — parse failures default to `peripheral`, analysis failures use safe defaults, DeepResearch falls back from PDF to text-only
+- Fetching lives in `src/fetcher.py`. It combines arXiv API keyword search with arXiv RSS metadata. RSS announce types are used to prefer new and cross submissions, ignore replacement-only entries, and keep recent API-only papers as a safety net.
+- Deduplication lives in `src/dedup.py`. `data/papers_index.json` is the cumulative source of truth, and `save_index()` writes a `.bak` backup before replacing the index.
+- Relevance filtering lives in `src/relevance_filter.py`. The LLM classifies papers as `core`, `peripheral`, or `not_relevant`. Parse failures and missing results default to `peripheral` so potentially relevant papers are not dropped silently.
+- Deep analysis lives in `src/deep_analysis.py`. It runs for both core and peripheral papers, reads affiliation tiers from `config/affiliations.json`, adds focus relevance from `config/config.yaml`, computes weighted scores, and assigns report tags.
+- DeepResearch lives in `src/deep_research.py`. It runs only for core papers unless `SKIP_DEEP_RESEARCH=1` is set. It prefers local PDF input, switches from native PDF parsing to `pdf-text` above 15 MB, and falls back to text-only analysis if PDF processing fails.
+- Report and email rendering live in `src/report_generator.py` with Jinja2 templates under `templates/`. Markdown rendering uses `autoescape=False`; HTML email rendering uses `autoescape=True`. Keep report shaping logic in `_paper_view()` rather than in templates.
+- Git push support exists in `src/git_ops.py`, but the current workflow sets `SKIP_GIT_PUSH=1` during pipeline execution and performs the data submodule commit and parent submodule-pointer commit in `.github/workflows/daily-run.yml`.
 
-**Data storage**: `data/` is a git submodule (separate repo). Contains `papers_index.json` (cumulative dedup index), `reports/YYYY-MM-DD.md`, and `pdfs/`. CI pushes to both repos using PAT_TOKEN.
+### Configuration and prompts
+
+- Runtime configuration lives in `config/config.yaml`: arXiv categories, research directions, model IDs, scoring weights, email settings, concurrency, PDF settings, and hjfy link settings.
+- Prompt text lives in `prompts/` and is loaded with `config.load_prompt()`. Change LLM behavior through prompt files and model settings before changing Python code.
+- The OpenRouter client is centralized in `src/llm_client.py`. It retries 429 and 5xx or transport failures three times with 2, 4, and 8 second backoff.
+- Data models are dataclasses in `src/models.py`. Keep dependencies minimal and avoid adding Pydantic unless the project direction changes.
+
+### Data layout
+
+`data/` is a git submodule backed by a separate data repository. It contains `papers_index.json`, generated reports under `data/reports/YYYY-MM-DD.md`, and downloaded PDFs under `data/pdfs/<date>/`. Local runs skip remote git pushes unless CI-related environment variables are set.
 
 ## Coding Conventions
 
-- `from __future__ import annotations` at top of every file; use `X | None` not `Optional[X]`
-- Dataclasses for models (not Pydantic) — keep dependencies minimal
-- Async for all I/O; pipeline orchestration uses `asyncio.gather` + `Semaphore`
-- Logging via `logging.getLogger(__name__)` — JSON-formatted output (`ts`, `level`, `stage`, `msg`). Never use `print()`
-- All tunable parameters (model IDs, thresholds, keywords, batch sizes) live in `config/config.yaml` — don't hardcode
-- Prompts are plain text files in `prompts/` loaded via `config.load_prompt()` — edit prompts to change LLM behavior, not code
-- Templates use Jinja2: `autoescape=False` for Markdown, `autoescape=True` for HTML email. Business logic stays in `report_generator.py::_paper_view()`, not in templates
-- Use `pathlib.Path` for all file paths (Windows + Linux compatibility)
+- Put `from __future__ import annotations` at the top of Python files.
+- Prefer `X | None` over `Optional[X]` in new or edited code.
+- Use async I/O for network and LLM work. Pipeline concurrency is controlled with `asyncio.Semaphore` from `config.config.yaml`.
+- Use `logging.getLogger(__name__)`; do not use `print()`. The root logger emits JSON-shaped records with `ts`, `level`, `stage`, and `msg`.
+- Keep tunable values in `config/config.yaml`. Do not hardcode model IDs, thresholds, keywords, batch sizes, or concurrency limits in stage code.
+- Use `pathlib.Path` for filesystem paths to keep Windows and Linux behavior consistent.
 
 ## Extension Patterns
 
-**Adding a research direction**: Add keyword block in `config/config.yaml` under `research_directions` → update `prompts/relevance_filter.txt` → add display name in `report_generator.py` `DIRECTION_DISPLAY` dict.
-
-**Adding a pipeline stage**: Create `src/new_stage.py` with async functions → wire into `main.py::run_pipeline()` → add `Semaphore` for LLM/network calls → add config keys if needed.
-
-**Changing LLM behavior**: Edit prompt files in `prompts/`. Change model via `models.*.model_id` in config.yaml. Parsing changes go in `_parse_response()` / `_parse_analysis()` — always handle malformed JSON.
+- Add a research direction by adding a block under `research_directions` in `config/config.yaml`, updating `prompts/relevance_filter.txt`, and adding a display label to `DIRECTION_DISPLAY` in `src/report_generator.py`.
+- Add a pipeline stage by creating a focused `src/<stage>.py` module, wiring it into `src/main.py::run_pipeline()`, adding a semaphore for network or LLM fanout when needed, and moving new knobs into `config/config.yaml`.
+- Change output structure by updating `src/report_generator.py::_paper_view()` and the relevant template together. Avoid putting business logic directly into Jinja2 templates.
+- Change model behavior by editing prompt files and `models.*` entries in `config/config.yaml`. If response structure changes, update the relevant parser and preserve malformed JSON fallbacks.
 
 ## Known Constraints
 
-- `papers_index.json` is the single source of truth for dedup. If corrupted/deleted, all papers get reprocessed. A `.bak` backup is created on every save
-- Git push only runs in CI (`GITHUB_ACTIONS` env var check)
-- `analyze_all()` and `generate_all_deep_research()` are legacy serial wrappers, unused by the pipeline — dead code kept for standalone testing
-- LLM retries: 3 attempts with exponential backoff (2s/4s/8s) for 429 and 5xx errors
-- arXiv `api_delay_seconds` (default 3s) and PDF download semaphore (default 5) prevent rate limiting
+- `papers_index.json` controls deduplication. If it is deleted or corrupted, previously seen papers can be reprocessed.
+- `analyze_all()` and `generate_all_deep_research()` are legacy serial wrappers for standalone use. The main pipeline uses concurrent calls inside `run_pipeline()`.
+- `download_all_pdfs()` has a `max_concurrent` argument, but `run_pipeline()` currently calls it with the function default of 5.
+- arXiv API calls use `api_delay_seconds` from config between direction searches to reduce rate limiting.
+- Email requires `QQ_MAIL_ADDRESS` and `QQ_MAIL_AUTH_CODE`. Missing email variables skip email without failing report generation.
