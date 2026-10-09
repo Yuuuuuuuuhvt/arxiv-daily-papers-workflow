@@ -8,7 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import DATA_DIR, load_config, get_env
+from .config import DATA_DIR, ROOT_DIR, load_config, get_env
 from .dedup import dedup, load_index, save_index
 from .deep_analysis import analyze_paper
 from .deep_research import generate_deep_research
@@ -101,7 +101,7 @@ async def run_pipeline() -> None:
     if pdf_config.get("download_enabled", False):
         pdf_base = Path(pdf_config.get("storage_dir", "data/pdfs"))
         if not pdf_base.is_absolute():
-            pdf_base = DATA_DIR / pdf_base.name
+            pdf_base = ROOT_DIR / pdf_config.get("storage_dir", "storage/pdfs")
         pdf_dir = pdf_base / date_str
         logger.info("=== Downloading PDFs to %s ===", pdf_dir)
         await download_all_pdfs(core_papers, pdf_dir)
@@ -134,10 +134,12 @@ async def run_pipeline() -> None:
 
     # Save index
     core_ids = {p.arxiv_id for p in core_papers}
+    github_repo = os.environ.get("GITHUB_REPOSITORY", "Yuuuuuuuuhvt/arxiv-daily-papers-workflow")
     for paper in all_relevant:
         analysis = analyses.get(paper.arxiv_id)
         if analysis:
-            entry = paper_to_index_entry(paper, analysis)
+            rel_url = f"https://github.com/{github_repo}/releases/download/v{date_str}/{paper.arxiv_id}.pdf"
+            entry = paper_to_index_entry(paper, analysis, release_pdf_url=rel_url)
             entry["relevance_tier"] = "core" if paper.arxiv_id in core_ids else "peripheral"
             index[paper.arxiv_id] = entry
     save_index(index, index_path)

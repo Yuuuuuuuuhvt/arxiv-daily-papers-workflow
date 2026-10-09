@@ -16,8 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          submodules: recursive
+          fetch-depth: 1
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Prepare git state
@@ -29,6 +28,8 @@ jobs:
           git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git"
           git fetch origin main
           git checkout -B main origin/main
+
+          git submodule update --init --depth 1 data
 
           git -C data config user.name "arxiv-agent[bot]"
           git -C data config user.email "bot@users.noreply.github.com"
@@ -50,6 +51,33 @@ jobs:
           QQ_MAIL_ADDRESS: ${{ secrets.QQ_MAIL_ADDRESS }}
           SKIP_GIT_PUSH: "1"
         run: python -m src.main
+
+      - name: Upload PDF release assets
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+        run: |
+          date_str=$(date -u +%Y-%m-%d)
+          tag="v${date_str}"
+          pdf_dir="storage/pdfs/${date_str}"
+          if [ -d "$pdf_dir" ]; then
+            shopt -s nullglob
+            pdfs=("$pdf_dir"/*.pdf)
+            valid_pdfs=()
+            for pdf in "${pdfs[@]}"; do
+              size=$(stat -c%s "$pdf" 2>/dev/null || stat -f%z "$pdf" 2>/dev/null || wc -c < "$pdf")
+              if [ "$size" -le 2147483648 ]; then
+                valid_pdfs+=("$pdf")
+              else
+                echo "Warning: $pdf exceeds 2 GiB ($size bytes), skipping release asset upload."
+              fi
+            done
+            if [ ${#valid_pdfs[@]} -gt 0 ]; then
+              gh release create "$tag" "${valid_pdfs[@]}" \
+                --title "arXiv Papers ${date_str}" \
+                --notes "Daily papers for ${date_str}" \
+                || gh release upload "$tag" "${valid_pdfs[@]}" --clobber
+            fi
+          fi
 
       - name: Commit and push data submodule
         env:

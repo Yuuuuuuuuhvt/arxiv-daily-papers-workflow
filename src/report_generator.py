@@ -23,14 +23,18 @@ def _paper_view(
     paper: ArxivPaper,
     analysis: AnalysisResult,
     hjfy_template: str,
+    date_str: str = "",
     deep_research: str = "",
 ) -> dict:
+    github_repo = os.environ.get("GITHUB_REPOSITORY", "Yuuuuuuuuhvt/arxiv-daily-papers-workflow")
+    release_pdf_url = f"https://github.com/{github_repo}/releases/download/v{date_str}/{paper.arxiv_id}.pdf"
     return {
         "arxiv_id": paper.arxiv_id,
         "title": paper.title,
         "authors_str": ", ".join(paper.authors[:5]) + (" et al." if len(paper.authors) > 5 else ""),
         "abs_url": paper.abs_url,
         "pdf_url": paper.pdf_url,
+        "release_pdf_url": release_pdf_url,
         "hjfy_url": hjfy_template.format(arxiv_id=paper.arxiv_id),
         "code_url": analysis.code_url,
         "one_line_summary": analysis.one_line_summary,

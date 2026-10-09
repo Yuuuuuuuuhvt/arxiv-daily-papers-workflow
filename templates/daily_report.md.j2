@@ -25,7 +25,7 @@
 
 **Authors**: {{ paper.authors_str }}
 **Affiliation**: {{ paper.affiliation_names_str }} (Tier {{ paper.affiliation_tier }})
-**Links**: [arXiv]({{ paper.abs_url }}) | [PDF]({{ paper.pdf_url }}) | [中文翻译]({{ paper.hjfy_url }}){% if paper.code_url %} | [Code]({{ paper.code_url }}){% endif %}
+**Links**: [arXiv]({{ paper.abs_url }}) | [PDF]({{ paper.pdf_url }}) | [附件下载]({{ paper.release_pdf_url }}) | [中文翻译]({{ paper.hjfy_url }}){% if paper.code_url %} | [Code]({{ paper.code_url }}){% endif %}
 
 {{ paper.detailed_summary }}
 
@@ -52,7 +52,7 @@
 > {{ paper.one_line_summary }}
 
 **Authors**: {{ paper.authors_str }}
-**Links**: [arXiv]({{ paper.abs_url }}) | [PDF]({{ paper.pdf_url }}) | [中文翻译]({{ paper.hjfy_url }}){% if paper.code_url %} | [Code]({{ paper.code_url }}){% endif %}
+**Links**: [arXiv]({{ paper.abs_url }}) | [PDF]({{ paper.pdf_url }}) | [附件下载]({{ paper.release_pdf_url }}) | [中文翻译]({{ paper.hjfy_url }}){% if paper.code_url %} | [Code]({{ paper.code_url }}){% endif %}
 
 <details>
 <summary>详细分析</summary>
@@ -89,7 +89,7 @@ Score: {{ paper.weighted_score }}/5.0 | {{ paper.direction_display }}
 > {{ paper.one_line_summary }}
 
 **Authors**: {{ paper.authors_str }}
-**Links**: [arXiv]({{ paper.abs_url }}) | [PDF]({{ paper.pdf_url }}) | [中文翻译]({{ paper.hjfy_url }}){% if paper.code_url %} | [Code]({{ paper.code_url }}){% endif %}
+**Links**: [arXiv]({{ paper.abs_url }}) | [PDF]({{ paper.pdf_url }}) | [附件下载]({{ paper.release_pdf_url }}) | [中文翻译]({{ paper.hjfy_url }}){% if paper.code_url %} | [Code]({{ paper.code_url }}){% endif %}
 
 ---
 {% endfor %}

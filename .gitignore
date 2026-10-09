@@ -14,3 +14,5 @@ venv/
 # Test scripts
 _test_*.py
 test_fetch_only.py
+
+storage/

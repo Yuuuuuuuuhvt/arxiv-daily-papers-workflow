@@ -4,7 +4,7 @@ import base64
 import logging
 from pathlib import Path
 
-from .config import load_prompt, DATA_DIR
+from .config import load_prompt, DATA_DIR, ROOT_DIR
 from .llm_client import call_llm
 from .models import ArxivPaper
 
@@ -68,7 +68,7 @@ async def generate_deep_research(
     # Resolve local PDF directory
     pdf_dir = Path(pdf_config.get("storage_dir", "data/pdfs"))
     if not pdf_dir.is_absolute():
-        pdf_dir = DATA_DIR / pdf_dir.name
+        pdf_dir = ROOT_DIR / pdf_config.get("storage_dir", "storage/pdfs")
 
     b64_url, file_size = _read_pdf_base64(paper, pdf_dir)
     if not b64_url:

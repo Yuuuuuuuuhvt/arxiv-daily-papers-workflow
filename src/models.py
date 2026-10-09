@@ -56,7 +56,11 @@ class AnalysisResult:
     weighted_score: float = 0.0
 
 
-def paper_to_index_entry(paper: ArxivPaper, analysis: AnalysisResult) -> dict:
+def paper_to_index_entry(
+    paper: ArxivPaper,
+    analysis: AnalysisResult,
+    release_pdf_url: str = "",
+) -> dict:
     return {
         "title": paper.title,
         "authors": paper.authors,
@@ -66,6 +70,7 @@ def paper_to_index_entry(paper: ArxivPaper, analysis: AnalysisResult) -> dict:
         "updated": paper.updated.isoformat() if isinstance(paper.updated, datetime) else str(paper.updated),
         "abs_url": paper.abs_url,
         "pdf_url": paper.pdf_url,
+        "release_pdf_url": release_pdf_url,
         "first_seen": datetime.utcnow().strftime("%Y-%m-%d"),
         "announce_type": paper.announce_type,
         "direction": analysis.direction,

@@ -159,7 +159,7 @@ concurrency:
 
 pdf:
   download_enabled: true
-  storage_dir: "data/pdfs"
+  storage_dir: "storage/pdfs"
   engine: "native"  # native | pdf-text | mistral-ocr (auto-selected by file size)
 
 hjfy:
