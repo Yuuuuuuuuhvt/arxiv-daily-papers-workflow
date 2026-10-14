@@ -1,0 +1,80 @@
+name: Daily Papers Agent
+on:
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: UTC submission date for backfill, leave empty for current feed
+        required: false
+      validation:
+        description: Small run without mail, releases or production pushes
+        type: boolean
+        default: false
+concurrency:
+  group: daily-papers
+  cancel-in-progress: false
+jobs:
+  daily-run:
+    runs-on: tx-linux
+    timeout-minutes: 180
+    env:
+      FORGEJO_PAPERS_TOKEN: ${{ secrets.PAPERS_WRITE_TOKEN }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      QQ_MAIL_AUTH_CODE: ${{ secrets.QQ_MAIL_AUTH_CODE }}
+      QQ_MAIL_ADDRESS: ${{ secrets.QQ_MAIL_ADDRESS }}
+      REPORT_DATE: ${{ inputs.report_date }}
+      VALIDATION: ${{ inputs.validation }}
+      SKIP_GIT_PUSH: '1'
+      PDF_RELEASE_BASE_URL: https://git.luonto.me/yurun/arxiv-daily-papers-workflow
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Prepare isolated runtime and authenticated data checkout
+        run: |
+          test -n "$FORGEJO_PAPERS_TOKEN"
+          mkdir -p "$RUNNER_TEMP/paper-auth"
+          cat > "$RUNNER_TEMP/paper-auth/askpass" <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' yurun ;;
+            *Password*) printf '%s\n' "$FORGEJO_PAPERS_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          SH
+          chmod 0700 "$RUNNER_TEMP/paper-auth/askpass"
+          echo "GIT_ASKPASS=$RUNNER_TEMP/paper-auth/askpass" >> "$GITHUB_ENV"
+          echo 'GIT_TERMINAL_PROMPT=0' >> "$GITHUB_ENV"
+          export GIT_ASKPASS="$RUNNER_TEMP/paper-auth/askpass" GIT_TERMINAL_PROMPT=0
+          git clone --depth 1 https://git.luonto.me/yurun/embodied-daily-papers.git data
+          git config user.name 'arxiv-agent'
+          git config user.email 'git@luonto.me'
+          git -C data config user.name 'arxiv-agent'
+          git -C data config user.email 'git@luonto.me'
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+      - name: Run collection
+        run: |
+          if [ "$VALIDATION" = true ]; then
+            export MAX_PAPERS=2 SKIP_EMAIL=1 SKIP_DEEP_RESEARCH=1
+          fi
+          .venv/bin/python -m src.main
+      - name: Publish PDFs and update data and pointer
+        if: inputs.validation != true
+        run: |
+          .venv/bin/python -m src.release_assets
+          git -C data add reports run-metadata papers_index.json
+          if ! git -C data diff --cached --quiet; then
+            git -C data commit -m "chore(papers): collect ${REPORT_DATE:-current feed}"
+            git -C data pull --rebase origin main
+            git -C data push origin HEAD:main
+          fi
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(papers): update Forgejo data pointer'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Remove job credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/paper-auth/askpass"

@@ -8,7 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import DATA_DIR, ROOT_DIR, load_config, get_env
+from .config import DATA_DIR, ROOT_DIR, load_config, get_env, release_pdf_url
 from .dedup import dedup, load_index, save_index
 from .deep_analysis import analyze_paper
 from .deep_research import generate_deep_research
@@ -44,29 +44,54 @@ def setup_logging() -> None:
     root.setLevel(logging.INFO)
 
 
+def save_run_summary(date_str: str, summary: dict) -> None:
+    directory = DATA_DIR / "run-metadata"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{date_str}.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def save_empty_run(date_str: str, status: str, config: dict, summary: dict) -> None:
+    save_report(generate_daily_report(date_str, [], [], {}, {}, config), date_str)
+    summary["status"] = status
+    save_run_summary(date_str, summary)
+
+
 async def run_pipeline() -> None:
     setup_logging()
     logger = logging.getLogger("pipeline")
 
     config = load_config()
     api_key = get_env("OPENROUTER_API_KEY")
-    date_str = os.environ.get("REPORT_DATE", "").strip() or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    report_date = os.environ.get("REPORT_DATE", "").strip()
+    if report_date:
+        datetime.strptime(report_date, "%Y-%m-%d")
+    date_str = report_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    summary = {"date": date_str, "query_mode": "submitted-date-utc" if report_date else "hybrid-current", "email_sent": False}
 
     index_path = DATA_DIR / "papers_index.json"
     index = load_index(index_path)
 
     # Stage 2: Fetch
     logger.info("=== Stage 2: Fetching papers ===")
-    candidates = hybrid_fetch(config)
+    candidates = hybrid_fetch(config, report_date or None)
+    summary["candidates"] = len(candidates)
     if not candidates:
-        logger.info("No candidates found. Exiting.")
+        logger.info("No candidates found.")
+        save_empty_run(date_str, "no_candidates", config, summary)
         return
 
     # Stage 3: Dedup
     logger.info("=== Stage 3: Deduplication ===")
     new_papers = dedup(candidates, index)
+    maximum = int(os.environ.get("MAX_PAPERS", "0"))
+    if maximum < 0:
+        raise ValueError("MAX_PAPERS must be non-negative")
+    if maximum:
+        new_papers = new_papers[:maximum]
+    summary["new_papers"] = len(new_papers)
     if not new_papers:
-        logger.info("No new papers after dedup. Exiting.")
+        logger.info("No new papers after dedup.")
+        save_empty_run(date_str, "already_indexed", config, summary)
         return
 
     # Stage 4: Relevance filter (3-tier: core / peripheral / not_relevant)
@@ -78,7 +103,8 @@ async def run_pipeline() -> None:
     )
     all_relevant = core_papers + peripheral_papers
     if not all_relevant:
-        logger.info("No relevant papers after filtering. Exiting.")
+        logger.info("No relevant papers after filtering.")
+        save_empty_run(date_str, "no_relevant_papers", config, summary)
         return
 
     # Stage 5: Deep analysis for ALL relevant papers (core + peripheral)
@@ -134,11 +160,10 @@ async def run_pipeline() -> None:
 
     # Save index
     core_ids = {p.arxiv_id for p in core_papers}
-    github_repo = os.environ.get("GITHUB_REPOSITORY", "Yuuuuuuuuhvt/arxiv-daily-papers-workflow")
     for paper in all_relevant:
         analysis = analyses.get(paper.arxiv_id)
         if analysis:
-            rel_url = f"https://github.com/{github_repo}/releases/download/v{date_str}/{paper.arxiv_id}.pdf"
+            rel_url = release_pdf_url(date_str, paper.arxiv_id)
             entry = paper_to_index_entry(paper, analysis, release_pdf_url=rel_url)
             entry["relevance_tier"] = "core" if paper.arxiv_id in core_ids else "peripheral"
             index[paper.arxiv_id] = entry
@@ -155,7 +180,8 @@ async def run_pipeline() -> None:
     logger.info("=== Stage 7: Email ===")
     qq_addr = get_env("QQ_MAIL_ADDRESS", required=False)
     qq_auth = get_env("QQ_MAIL_AUTH_CODE", required=False)
-    if qq_addr and qq_auth:
+    skip_email = os.environ.get("SKIP_EMAIL", "").lower() in ("1", "true", "yes")
+    if qq_addr and qq_auth and not skip_email:
         email_html = generate_email_html(date_str, core_papers, analyses, config)
         subject = f"arXiv Daily -- {date_str} -- {len(all_relevant)} papers"
         send_digest(
@@ -168,6 +194,9 @@ async def run_pipeline() -> None:
         )
     else:
         logger.info("Email skipped: QQ_MAIL_ADDRESS or QQ_MAIL_AUTH_CODE not set")
+
+    summary.update(status="completed", core=len(core_papers), peripheral=len(peripheral_papers), email_sent=bool(qq_addr and qq_auth and not skip_email))
+    save_run_summary(date_str, summary)
 
     # Stage 7: Git push (only in CI unless delegated to workflow)
     skip_git_push = os.environ.get("SKIP_GIT_PUSH", "").strip().lower() in ("1", "true", "yes")

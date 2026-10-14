@@ -33,3 +33,8 @@ def get_env(key: str, required: bool = True) -> str:
     if required and not val:
         raise EnvironmentError(f"Missing required environment variable: {key}")
     return val
+
+
+def release_pdf_url(date_str: str, arxiv_id: str) -> str:
+    base = os.environ.get("PDF_RELEASE_BASE_URL", "https://git.luonto.me/yurun/arxiv-daily-papers-workflow").rstrip("/")
+    return f"{base}/releases/download/v{date_str}/{arxiv_id}.pdf"

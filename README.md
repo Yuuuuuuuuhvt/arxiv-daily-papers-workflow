@@ -96,3 +96,26 @@ The unit tests cover deterministic parts of the pipeline. End to end behavior st
 ## Data Policy
 
 The code repository should stay small. Generated reports, downloaded PDFs, and the cumulative `papers_index.json` belong in the `data/` submodule. API keys, mail authorization codes, and personal access tokens must stay in local environment variables or GitHub Actions secrets.
+
+## Forgejo production workflow and backfill
+
+Production now uses `.forgejo/workflows/daily-run.yml` on the TX Linux Runner.
+The `PAPERS_WRITE_TOKEN` secret supplies `FORGEJO_PAPERS_TOKEN`, which grants write access only to this code repository and the
+`embodied-daily-papers` data repository. The pipeline, PDF release attachments,
+data push and submodule pointer push all use Forgejo. The retained GitHub workflow
+stays disabled during migration.
+
+Email is optional: when `QQ_MAIL_ADDRESS` or `QQ_MAIL_AUTH_CODE` is missing, the
+pipeline skips only email delivery. Collection, reports, PDF publishing and data
+updates continue. `SKIP_EMAIL=1` explicitly disables mail for validation.
+
+Manual input `report_date` selects a UTC first-submission date in `YYYY-MM-DD`
+format. Historical runs query every page for that date and do not combine the
+current RSS feed with historical results. API failures fail the run instead of
+being recorded as empty days. The resulting report and `data/run-metadata` record
+include the requested date and processing outcome. A weekday run without an
+explicit date retains the current API/RSS feed behavior.
+
+The `validation` input limits analysis to two new papers, skips DeepResearch,
+email, release uploads and production pushes. It verifies real collection and
+analysis in an isolated job checkout before production scheduling is accepted.

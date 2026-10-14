@@ -71,14 +71,18 @@ def _result_to_paper(result: arxiv.Result, direction_id: str) -> ArxivPaper:
     )
 
 
-def fetch_api(config: dict) -> dict[str, ArxivPaper]:
+def fetch_api(config: dict, report_date: str | None = None) -> dict[str, ArxivPaper]:
     papers: dict[str, ArxivPaper] = {}
+    day = datetime.strptime(report_date, "%Y-%m-%d") if report_date else None
     max_results = config["arxiv"].get("api_max_results_per_direction", 50)
     delay = config["arxiv"].get("api_delay_seconds", 3)
     num_retries = config["arxiv"].get("api_num_retries", 5)
 
     for direction_id, direction_config in config["research_directions"].items():
         query = build_query(direction_config)
+        if day:
+            stamp = day.strftime("%Y%m%d")
+            query = f"({query}) AND submittedDate:[{stamp}0000 TO {stamp}2359]"
         logger.info("Fetching API for %s: %s", direction_id, query[:120])
 
         client = arxiv.Client(
@@ -87,7 +91,7 @@ def fetch_api(config: dict) -> dict[str, ArxivPaper]:
         )
         search = arxiv.Search(
             query=query,
-            max_results=max_results,
+            max_results=None if day else max_results,
             sort_by=arxiv.SortCriterion.LastUpdatedDate,
             sort_order=arxiv.SortOrder.Descending,
         )
@@ -101,9 +105,13 @@ def fetch_api(config: dict) -> dict[str, ArxivPaper]:
                 count += 1
             logger.info("API returned %d papers for %s", count, direction_id)
         except arxiv.HTTPError as e:
+            if day:
+                raise
             logger.warning("arXiv API rate-limited for %s after %d retries: %s",
                            direction_id, num_retries, e)
         except Exception as e:
+            if day:
+                raise
             logger.warning("arXiv API failed for %s: %s", direction_id, e)
 
         time.sleep(delay)
@@ -198,8 +206,12 @@ def fetch_rss(config: dict) -> tuple[dict[str, ArxivPaper], dict[str, dict]]:
     return papers, metadata
 
 
-def hybrid_fetch(config: dict) -> list[ArxivPaper]:
-    api_papers = fetch_api(config)
+def hybrid_fetch(config: dict, report_date: str | None = None) -> list[ArxivPaper]:
+    api_papers = fetch_api(config, report_date)
+    if report_date:
+        # 补收按 UTC 首次提交日期查询，不能把当前 RSS 当作历史公告。
+        return [paper for paper in api_papers.values()
+                if paper.published.astimezone(timezone.utc).strftime("%Y-%m-%d") == report_date]
     _rss_papers, rss_metadata = fetch_rss(config)
 
     for arxiv_id, paper in api_papers.items():

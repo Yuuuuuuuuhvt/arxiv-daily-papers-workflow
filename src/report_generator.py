@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from .config import TEMPLATES_DIR, DATA_DIR
+from .config import TEMPLATES_DIR, DATA_DIR, release_pdf_url
 from .models import AnalysisResult, ArxivPaper
 
 logger = logging.getLogger(__name__)
@@ -26,15 +26,13 @@ def _paper_view(
     date_str: str = "",
     deep_research: str = "",
 ) -> dict:
-    github_repo = os.environ.get("GITHUB_REPOSITORY", "Yuuuuuuuuhvt/arxiv-daily-papers-workflow")
-    release_pdf_url = f"https://github.com/{github_repo}/releases/download/v{date_str}/{paper.arxiv_id}.pdf"
     return {
         "arxiv_id": paper.arxiv_id,
         "title": paper.title,
         "authors_str": ", ".join(paper.authors[:5]) + (" et al." if len(paper.authors) > 5 else ""),
         "abs_url": paper.abs_url,
         "pdf_url": paper.pdf_url,
-        "release_pdf_url": release_pdf_url,
+        "release_pdf_url": release_pdf_url(date_str, paper.arxiv_id),
         "hjfy_url": hjfy_template.format(arxiv_id=paper.arxiv_id),
         "code_url": analysis.code_url,
         "one_line_summary": analysis.one_line_summary,
@@ -70,13 +68,13 @@ def generate_daily_report(
     for paper in core_papers:
         a = analyses.get(paper.arxiv_id, AnalysisResult())
         dr = deep_research_reports.get(paper.arxiv_id, "")
-        core_views.append(_paper_view(paper, a, hjfy_template, dr))
+        core_views.append(_paper_view(paper, a, hjfy_template, date_str, dr))
     core_views.sort(key=lambda v: v["weighted_score"], reverse=True)
 
     peripheral_views = []
     for paper in peripheral_papers:
         a = analyses.get(paper.arxiv_id, AnalysisResult())
-        peripheral_views.append(_paper_view(paper, a, hjfy_template))
+        peripheral_views.append(_paper_view(paper, a, hjfy_template, date_str))
     peripheral_views.sort(key=lambda v: v["weighted_score"], reverse=True)
 
     highlights = [v for v in core_views if v["weighted_score"] >= hot_threshold]
@@ -127,7 +125,7 @@ def generate_email_html(
     all_views = []
     for paper in papers:
         a = analyses.get(paper.arxiv_id, AnalysisResult())
-        all_views.append(_paper_view(paper, a, hjfy_template))
+        all_views.append(_paper_view(paper, a, hjfy_template, date_str))
 
     all_views.sort(key=lambda v: v["weighted_score"], reverse=True)
     highlights = all_views[:max_highlights]
