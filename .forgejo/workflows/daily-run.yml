@@ -81,7 +81,7 @@ jobs:
         if: inputs.validation != true
         run: |
           .venv/bin/python -m src.release_assets
-          git -C data add reports run-metadata papers_index.json
+          git -C data add reports run-metadata papers_index.json papers_index.json.bak
           if ! git -C data diff --cached --quiet; then
             git -C data commit -m "chore(papers): collect ${REPORT_DATE:-current feed}"
             git -C data pull --rebase origin main
@@ -93,6 +93,16 @@ jobs:
             git pull --rebase origin main
             git push origin HEAD:main
           fi
+      - name: Preserve failed collection before runner cleanup
+        if: failure()
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: paper-failed-collection
+          path: |
+            data/reports/${{ inputs.report_date }}.md
+            data/run-metadata/*
+            data/papers_index.json
+          if-no-files-found: warn
       - name: Remove job credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/paper-auth/askpass"
