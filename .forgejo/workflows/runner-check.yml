@@ -1,0 +1,18 @@
+name: Runner environment check
+on:
+  workflow_dispatch:
+jobs:
+  environment:
+    strategy:
+      matrix:
+        runner: [tx-linux, tx-macvm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      - name: Verify execution and proxy
+        run: |
+          node --version
+          python3 --version
+          cargo --version
+          git rev-parse HEAD
+          test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' https://git.luonto.me/user/login)" = 200
