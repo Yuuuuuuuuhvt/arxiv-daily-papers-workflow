@@ -5,6 +5,10 @@ on:
       report_date:
         description: UTC submission date for backfill, leave empty for current feed
         required: false
+      skip_email:
+        description: Skip mail during historical backfill
+        type: boolean
+        default: false
       validation:
         description: Small run without mail, releases or production pushes
         type: boolean
@@ -23,6 +27,8 @@ jobs:
       QQ_MAIL_ADDRESS: ${{ secrets.QQ_MAIL_ADDRESS }}
       REPORT_DATE: ${{ inputs.report_date }}
       VALIDATION: ${{ inputs.validation }}
+      SKIP_EMAIL: ${{ inputs.skip_email && '1' || '0' }}
+      GITHUB_RELEASE_SYNC_TOKEN: ${{ secrets.GH_RELEASE_SYNC_TOKEN }}
       SKIP_GIT_PUSH: '1'
       PDF_RELEASE_BASE_URL: https://git.luonto.me/yurun/arxiv-daily-papers-workflow
     steps:

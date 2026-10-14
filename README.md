@@ -119,3 +119,9 @@ explicit date retains the current API/RSS feed behavior.
 The `validation` input limits analysis to two new papers, skips DeepResearch,
 email, release uploads and production pushes. It verifies real collection and
 analysis in an isolated job checkout before production scheduling is accepted.
+
+Historical collection selects the first UTC submission date and analyzes the
+currently available arXiv version. It does not reconstruct past RSS entries or
+past versions. Backfill uses skip_email to prevent delayed notification bursts.
+PDF attachments are verified against existing files and published to both
+Forgejo and the GitHub fallback before production data commits.
