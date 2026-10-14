@@ -25,6 +25,7 @@ def _paper_view(
     hjfy_template: str,
     date_str: str = "",
     deep_research: str = "",
+    pdf_available: bool = True,
 ) -> dict:
     return {
         "arxiv_id": paper.arxiv_id,
@@ -32,7 +33,7 @@ def _paper_view(
         "authors_str": ", ".join(paper.authors[:5]) + (" et al." if len(paper.authors) > 5 else ""),
         "abs_url": paper.abs_url,
         "pdf_url": paper.pdf_url,
-        "release_pdf_url": release_pdf_url(date_str, paper.arxiv_id),
+        "release_pdf_url": release_pdf_url(date_str, paper.arxiv_id) if pdf_available else "",
         "hjfy_url": hjfy_template.format(arxiv_id=paper.arxiv_id),
         "code_url": analysis.code_url,
         "one_line_summary": analysis.one_line_summary,
@@ -64,17 +65,18 @@ def generate_daily_report(
     hjfy_template = config.get("hjfy", {}).get("link_template", "https://hjfy.top/arxiv/{arxiv_id}")
     hot_threshold = config.get("scoring", {}).get("hot_threshold", 4.0)
 
+    downloaded = set(config.get("downloaded_pdf_ids", []))
     core_views = []
     for paper in core_papers:
         a = analyses.get(paper.arxiv_id, AnalysisResult())
         dr = deep_research_reports.get(paper.arxiv_id, "")
-        core_views.append(_paper_view(paper, a, hjfy_template, date_str, dr))
+        core_views.append(_paper_view(paper, a, hjfy_template, date_str, dr, paper.arxiv_id in downloaded))
     core_views.sort(key=lambda v: v["weighted_score"], reverse=True)
 
     peripheral_views = []
     for paper in peripheral_papers:
         a = analyses.get(paper.arxiv_id, AnalysisResult())
-        peripheral_views.append(_paper_view(paper, a, hjfy_template, date_str))
+        peripheral_views.append(_paper_view(paper, a, hjfy_template, date_str, pdf_available=paper.arxiv_id in downloaded))
     peripheral_views.sort(key=lambda v: v["weighted_score"], reverse=True)
 
     highlights = [v for v in core_views if v["weighted_score"] >= hot_threshold]

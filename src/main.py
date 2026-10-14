@@ -123,6 +123,7 @@ async def run_pipeline() -> None:
     analyses: dict[str, AnalysisResult] = dict(analysis_results)
 
     # PDF download (concurrent, for local archival) — core papers only
+    downloaded_pdfs = {}
     pdf_config = config.get("pdf", {})
     if pdf_config.get("download_enabled", False):
         pdf_base = Path(pdf_config.get("storage_dir", "data/pdfs"))
@@ -130,7 +131,7 @@ async def run_pipeline() -> None:
             pdf_base = ROOT_DIR / pdf_config.get("storage_dir", "storage/pdfs")
         pdf_dir = pdf_base / date_str
         logger.info("=== Downloading PDFs to %s ===", pdf_dir)
-        await download_all_pdfs(core_papers, pdf_dir)
+        downloaded_pdfs = await download_all_pdfs(core_papers, pdf_dir)
         pdf_config = {**pdf_config, "storage_dir": str(pdf_dir)}
 
     # Stage 5b: DeepResearch — CORE papers only (with full PDF)
@@ -163,7 +164,7 @@ async def run_pipeline() -> None:
     for paper in all_relevant:
         analysis = analyses.get(paper.arxiv_id)
         if analysis:
-            rel_url = release_pdf_url(date_str, paper.arxiv_id)
+            rel_url = release_pdf_url(date_str, paper.arxiv_id) if paper.arxiv_id in downloaded_pdfs else ""
             entry = paper_to_index_entry(paper, analysis, release_pdf_url=rel_url)
             entry["relevance_tier"] = "core" if paper.arxiv_id in core_ids else "peripheral"
             index[paper.arxiv_id] = entry
@@ -172,7 +173,8 @@ async def run_pipeline() -> None:
     # Stage 6: Report generation
     logger.info("=== Stage 6: Report generation ===")
     report_md = generate_daily_report(
-        date_str, core_papers, peripheral_papers, analyses, deep_research_reports, config
+        date_str, core_papers, peripheral_papers, analyses, deep_research_reports,
+        {**config, "downloaded_pdf_ids": list(downloaded_pdfs)}
     )
     save_report(report_md, date_str)
 

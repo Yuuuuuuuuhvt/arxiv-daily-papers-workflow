@@ -53,3 +53,5 @@ def test_release_url_uses_real_report_date():
     assert view["release_pdf_url"] == release_pdf_url("2026-10-09", paper.arxiv_id)
     assert view["release_pdf_url"].startswith("https://git.luonto.me/")
     assert view["deep_research"] == "research"
+
+    assert report_generator._paper_view(paper, AnalysisResult(), "https://example.test/{arxiv_id}", "2026-10-09", pdf_available=False)["release_pdf_url"] == ""
