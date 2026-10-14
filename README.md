@@ -115,6 +115,9 @@ current RSS feed with historical results. API failures fail the run instead of
 being recorded as empty days. The resulting report and `data/run-metadata` record
 include the requested date and processing outcome. A weekday run without an
 explicit date retains the current API/RSS feed behavior.
+An empty retry preserves an existing report and its corresponding run summary.
+A legacy report without a summary receives a `retained_existing_report` marker
+in the newly recorded attempt summary.
 
 The `validation` input limits analysis to two new papers, skips DeepResearch,
 email, release uploads and production pushes. It verifies real collection and

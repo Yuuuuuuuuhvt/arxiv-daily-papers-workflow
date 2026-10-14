@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -55,3 +56,25 @@ def test_release_url_uses_real_report_date():
     assert view["deep_research"] == "research"
 
     assert report_generator._paper_view(paper, AnalysisResult(), "https://example.test/{arxiv_id}", "2026-10-09", pdf_available=False)["release_pdf_url"] == ""
+
+
+def test_empty_retry_preserves_existing_report_and_summary(monkeypatch, tmp_path):
+    from src import main
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    reports = tmp_path / "reports"
+    metadata = tmp_path / "run-metadata"
+    reports.mkdir()
+    metadata.mkdir()
+    report = reports / "2026-10-09.md"
+    summary = metadata / "2026-10-09.json"
+    report.write_text("Existing complete analysis\n")
+    summary.write_text('{"status":"completed","core":32}\n')
+    main.save_empty_run("2026-10-09", "already_indexed", {}, {"new_papers": 0})
+    assert report.read_text() == "Existing complete analysis\n"
+    assert summary.read_text() == '{"status":"completed","core":32}\n'
+    summary.unlink()
+    main.save_empty_run("2026-10-09", "already_indexed", {}, {"new_papers": 0})
+    assert report.read_text() == "Existing complete analysis\n"
+    assert json.loads(summary.read_text()) == {
+        "new_papers": 0, "status": "already_indexed", "retained_existing_report": True
+    }

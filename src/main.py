@@ -51,6 +51,14 @@ def save_run_summary(date_str: str, summary: dict) -> None:
 
 
 def save_empty_run(date_str: str, status: str, config: dict, summary: dict) -> None:
+    # 重复补跑没有新论文时，已发布日报仍是当天的完整分析结果。
+    # 已有摘要同样保留；只有旧日报缺少摘要时才记录本次空尝试。
+    report_path = DATA_DIR / "reports" / f"{date_str}.md"
+    if report_path.is_file():
+        logging.getLogger("pipeline").info("Retaining existing report for %s after %s", date_str, status)
+        if not (DATA_DIR / "run-metadata" / f"{date_str}.json").is_file():
+            save_run_summary(date_str, {**summary, "status": status, "retained_existing_report": True})
+        return
     save_report(generate_daily_report(date_str, [], [], {}, {}, config), date_str)
     summary["status"] = status
     save_run_summary(date_str, summary)
