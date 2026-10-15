@@ -50,7 +50,7 @@ src/                        # Python package, run via: python -m src.main
   deep_research.py          # Per-paper 3-module scholarly analysis (with PDF support)
   pdf_downloader.py         # Async PDF download from arXiv
   report_generator.py       # Jinja2 report + email HTML rendering
-  email_sender.py           # QQ Mail SMTP_SSL sender
+  email_sender.py           # 通用 SMTP STARTTLS 发信，返回实际提交结果
   git_ops.py                # Data submodule commit + push (CI only)
 config/
   config.yaml               # ALL configuration: keywords, models, scoring, concurrency
@@ -94,7 +94,7 @@ data/                       # Runtime data (gitignored, or git submodule)
 
 - **All tunable parameters live in `config/config.yaml`** — never hardcode model IDs, thresholds, batch sizes, or keyword lists in source code.
 - **Prompts are plain text files** in `prompts/` — loaded at runtime via `config.load_prompt()`. Edit prompts to adjust LLM behavior without touching code.
-- **Environment variables**: `OPENROUTER_API_KEY` (required), `QQ_MAIL_ADDRESS` + `QQ_MAIL_AUTH_CODE` (optional), `SKIP_DEEP_RESEARCH` (optional flag).
+- **Environment variables**: `OPENROUTER_API_KEY` (required), `MAIL_SMTP_HOST`、`MAIL_SMTP_PORT`、`MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM`、`MAIL_TO`，六项齐全时通过 STARTTLS 发信，缺项只跳过邮件, `SKIP_DEEP_RESEARCH` (optional flag).
 
 ### Templates
 
@@ -171,8 +171,8 @@ pytest tests/ -v
 
 - Tests live in `tests/` and use plain `pytest` (no fixtures framework, no mocks library).
 - Test helper `_make_paper()` creates minimal `ArxivPaper` instances for unit tests.
-- Current coverage: dedup logic, query building, relevance response parsing.
-- **Missing test coverage**: `deep_analysis`, `deep_research`, `report_generator`, `email_sender`, `llm_client`. These involve LLM calls and should be tested with mocked `call_llm`.
+- Current coverage: dedup logic, query building, relevance response parsing. 邮件测试覆盖 STARTTLS、认证顺序、失败处理与报告保留。
+- **Missing test coverage**: `deep_analysis`, `deep_research`, `report_generator`, `llm_client`. These involve LLM calls and should be tested with mocked `call_llm`.
 - Run: `pytest tests/ -v`
 
 ---

@@ -88,4 +88,4 @@ Fetch API and RSS -> Dedup -> Relevance Filter -> Deep Analysis -> PDF Download
 - `analyze_all()` and `generate_all_deep_research()` are legacy serial wrappers for standalone use. The main pipeline uses concurrent calls inside `run_pipeline()`.
 - `download_all_pdfs()` has a `max_concurrent` argument, but `run_pipeline()` currently calls it with the function default of 5.
 - arXiv API calls use `api_delay_seconds` from config between direction searches to reduce rate limiting.
-- Email requires `QQ_MAIL_ADDRESS` and `QQ_MAIL_AUTH_CODE`. Missing email variables skip email without failing report generation.
+- 邮件使用 STARTTLS，需要 `MAIL_SMTP_HOST`、`MAIL_SMTP_PORT`、`MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM`、`MAIL_TO`。缺少任一变量时仅跳过邮件，报告继续生成。发送失败时 `email_sent` 为 false。

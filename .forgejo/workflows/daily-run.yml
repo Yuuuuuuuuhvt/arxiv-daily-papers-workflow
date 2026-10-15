@@ -25,8 +25,12 @@ jobs:
     env:
       FORGEJO_PAPERS_TOKEN: ${{ secrets.PAPERS_WRITE_TOKEN }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      QQ_MAIL_AUTH_CODE: ${{ secrets.QQ_MAIL_AUTH_CODE }}
-      QQ_MAIL_ADDRESS: ${{ secrets.QQ_MAIL_ADDRESS }}
+      MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+      MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
       REPORT_DATE: ${{ inputs.report_date }}
       VALIDATION: ${{ inputs.validation }}
       SKIP_EMAIL: ${{ inputs.skip_email && '1' || '0' }}

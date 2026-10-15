@@ -148,9 +148,6 @@ scoring:
   hot_threshold: 4.0
 
 email:
-  smtp_server: "smtp.qq.com"
-  smtp_port: 465
-  use_ssl: true
   max_highlights_in_email: 3
 
 concurrency:

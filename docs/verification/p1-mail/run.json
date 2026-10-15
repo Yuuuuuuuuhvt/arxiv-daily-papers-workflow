@@ -1,0 +1,12 @@
+{
+  "id": 33,
+  "title": "日报邮件验证",
+  "workflow_id": "mail-check.yml",
+  "index_in_repo": 11,
+  "prettyref": "task/p1-mail",
+  "commit_sha": "a663b7c1f447186f18d94215f2f7880c1db7182c",
+  "status": "success",
+  "started": "2026-10-15T07:51:56+05:30",
+  "stopped": "2026-10-15T07:52:08+05:30",
+  "html_url": "https://git.luonto.me/yurun/arxiv-daily-papers-workflow/actions/runs/11"
+}
