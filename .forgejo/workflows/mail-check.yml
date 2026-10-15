@@ -1,0 +1,74 @@
+name: 日报邮件验证
+on:
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: 已有日报的 UTC 日期，仅发送邮件，不更新生产数据
+        required: true
+jobs:
+  mail-check:
+    runs-on: tx-linux
+    timeout-minutes: 5
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 发送已有日报并回读邮箱
+        env:
+          PAPERS_READ_TOKEN: ${{ secrets.PAPERS_WRITE_TOKEN }}
+          MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+          MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          REPORT_DATE: ${{ inputs.report_date }}
+        run: |
+          python3 - <<'PY'
+          import email
+          import html
+          import imaplib
+          import logging
+          import os
+          import ssl
+          import time
+          import urllib.request
+          from datetime import datetime
+          from uuid import uuid4
+          from src.email_sender import send_digest
+
+          logging.basicConfig(level=logging.INFO)
+          day = os.environ['REPORT_DATE']
+          datetime.strptime(day, '%Y-%m-%d')
+          url = f'https://git.luonto.me/api/v1/repos/yurun/embodied-daily-papers/raw/reports/{day}.md?ref=main'
+          req = urllib.request.Request(url, headers={'Authorization': 'token ' + os.environ['PAPERS_READ_TOKEN']})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              report = response.read().decode('utf-8')
+          assert report.strip(), '日报为空'
+          subject = f'arXiv Daily SMTP check {day} {uuid4().hex}'
+          body = '<p>本邮件用于验证日报投递，以下是已生成的完整日报。</p><pre style="white-space:pre-wrap">' + html.escape(report) + '</pre>'
+          sent = send_digest(subject, body, os.environ['MAIL_TO'], os.environ['MAIL_FROM'],
+                             os.environ['MAIL_USERNAME'], os.environ['MAIL_PASSWORD'],
+                             os.environ['MAIL_SMTP_HOST'], os.environ['MAIL_SMTP_PORT'])
+          assert sent, 'SMTP 提交失败'
+          with imaplib.IMAP4_SSL(os.environ['MAIL_SMTP_HOST'], 993, ssl_context=ssl.create_default_context(), timeout=30) as mailbox:
+              mailbox.login(os.environ['MAIL_USERNAME'], os.environ['MAIL_PASSWORD'])
+              mailbox.select('INBOX', readonly=True)
+              for attempt in range(12):
+                  status, result = mailbox.search(None, 'SUBJECT', '"' + subject + '"')
+                  assert status == 'OK'
+                  if result[0]:
+                      break
+                  time.sleep(5)
+              else:
+                  raise AssertionError('收件箱未找到验证邮件')
+              status, result = mailbox.fetch(result[0].split()[-1], '(BODY.PEEK[])')
+              assert status == 'OK'
+              message = email.message_from_bytes(result[0][1])
+              received_html = next(part.get_payload(decode=True).decode('utf-8') for part in message.walk() if part.get_content_type() == 'text/html')
+              assert received_html == body, '邮件正文不一致'
+              for name in ['Message-ID', 'From', 'To', 'Date', 'Authentication-Results', 'ARC-Authentication-Results', 'DKIM-Signature', 'Received']:
+                  for value in message.get_all(name, []):
+                      print(name + ': ' + value)
+              print('已通过 SMTP 提交、IMAP 收件和日报正文一致性验证。')
+          PY

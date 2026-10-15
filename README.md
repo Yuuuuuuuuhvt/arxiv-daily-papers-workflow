@@ -53,7 +53,7 @@ macOS and Linux users can set the same value through the shell.
 export OPENROUTER_API_KEY="sk-or-v1-..."
 ```
 
-Email delivery is optional. Set `QQ_MAIL_ADDRESS` and `QQ_MAIL_AUTH_CODE` only when the run should send the digest through QQ Mail SMTP.
+邮件推送为可选功能。六项 SMTP 环境变量齐全时通过 STARTTLS 发信，参数见下表。认证用户名、发件地址与收件地址分别配置，不要求三者相同。
 
 ## Run Locally
 
@@ -73,8 +73,12 @@ Required repository secrets are:
 |---|---|
 | `OPENROUTER_API_KEY` | LLM calls through OpenRouter |
 | `PAT_TOKEN` | Push access to both this repository and the data submodule repository |
-| `QQ_MAIL_ADDRESS` | Optional QQ Mail sender address |
-| `QQ_MAIL_AUTH_CODE` | Optional QQ Mail SMTP authorization code |
+| `MAIL_SMTP_HOST` | SMTP 主机，当前为 `mail.luonto.me` |
+| `MAIL_SMTP_PORT` | STARTTLS 端口，当前为 `587` |
+| `MAIL_USERNAME` | SMTP 登录用户名，当前为 `eai-papers@luonto.me` |
+| `MAIL_PASSWORD` | SMTP 登录口令，仅保存到私有 secret 与 Actions secrets |
+| `MAIL_FROM` | 发件地址，当前为 `eai-papers@luonto.me` |
+| `MAIL_TO` | 单个收件地址，当前为 `eai-papers@luonto.me` |
 
 The workflow sets `SKIP_GIT_PUSH=1` during the Python pipeline and handles commits explicitly in later shell steps. This keeps Git side effects visible in the workflow file.
 
@@ -105,9 +109,16 @@ The `PAPERS_WRITE_TOKEN` secret supplies `FORGEJO_PAPERS_TOKEN`, which grants wr
 data push and submodule pointer push all use Forgejo. The retained GitHub workflow
 stays disabled during migration.
 
-Email is optional: when `QQ_MAIL_ADDRESS` or `QQ_MAIL_AUTH_CODE` is missing, the
-pipeline skips only email delivery. Collection, reports, PDF publishing and data
-updates continue. `SKIP_EMAIL=1` explicitly disables mail for validation.
+生产邮件使用上表的六个 Forgejo Actions secrets，来源为 recitativo 的
+`secret/mail/eai-papers.env`。任一变量缺失时仅跳过邮件，采集、报告、PDF 发布和数据更新继续执行。
+`SKIP_EMAIL=1` 显式禁用邮件。无效端口、TLS、认证或发送失败会记录错误并令
+`data/run-metadata` 中的 `email_sent` 为 false，不删除已生成的报告。
+SMTP 使用系统证书校验和 30 秒连接及套接字操作超时，不自动重试以避免重复投递。
+TX 的 Runner 使用 host 网络，邮件域名由 `DOMAIN,mail.luonto.me,DIRECT` 规则直连。
+邮箱配额为 1024 MiB，本域收发不经过 SES 外部中继。
+
+SMTP 调用依据 [Python smtplib 文档](https://docs.python.org/3/library/smtplib.html#smtplib.SMTP.starttls)，
+先建立 TLS，再重新 EHLO 并认证。`email_sent` 仅表示 SMTP 接受提交，实际收件仍须经邮箱回读验证。
 
 Manual input `report_date` selects a UTC first-submission date in `YYYY-MM-DD`
 format. Historical runs query every page for that date and do not combine the
@@ -128,3 +139,11 @@ currently available arXiv version. It does not reconstruct past RSS entries or
 past versions. Backfill uses skip_email to prevent delayed notification bursts.
 PDF attachments are verified against existing files and published to both
 Forgejo and the GitHub fallback before production data commits.
+
+
+## 日报邮件独立验证
+
+手动运行 `.forgejo/workflows/mail-check.yml`，输入已有日报日期 `report_date`。
+作业只读取该日报并发送一封验证邮件，不调用模型，不发布附件，不写入生产分支。
+当前收发使用同一邮箱，作业通过 IMAP 993 回读 INBOX，核对完整正文并输出认证邮件头。
+SMTP 提交成功与收件确认分别验证，域内认证结果按实际邮件头记录，不等同于外域投递认证。

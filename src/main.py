@@ -188,24 +188,30 @@ async def run_pipeline() -> None:
 
     # Stage 7: Email
     logger.info("=== Stage 7: Email ===")
-    qq_addr = get_env("QQ_MAIL_ADDRESS", required=False)
-    qq_auth = get_env("QQ_MAIL_AUTH_CODE", required=False)
-    skip_email = os.environ.get("SKIP_EMAIL", "").lower() in ("1", "true", "yes")
-    if qq_addr and qq_auth and not skip_email:
+    mail_keys = ("MAIL_SMTP_HOST", "MAIL_SMTP_PORT", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_FROM", "MAIL_TO")
+    mail = {key: get_env(key, required=False) for key in mail_keys}
+    missing = [key for key, value in mail.items() if not value]
+    skip_email = os.environ.get("SKIP_EMAIL", "").strip().lower() in ("1", "true", "yes")
+    email_sent = False
+    if skip_email:
+        logger.info("Email skipped: SKIP_EMAIL=1")
+    elif missing:
+        logger.info("Email skipped: missing %s", ", ".join(missing))
+    else:
         email_html = generate_email_html(date_str, core_papers, analyses, config)
         subject = f"arXiv Daily -- {date_str} -- {len(all_relevant)} papers"
-        send_digest(
+        email_sent = send_digest(
             subject=subject,
             html_body=email_html,
-            to_addr=qq_addr,
-            auth_code=qq_auth,
-            smtp_server=config["email"]["smtp_server"],
-            smtp_port=config["email"]["smtp_port"],
+            to_addr=mail["MAIL_TO"],
+            from_addr=mail["MAIL_FROM"],
+            username=mail["MAIL_USERNAME"],
+            password=mail["MAIL_PASSWORD"],
+            smtp_host=mail["MAIL_SMTP_HOST"],
+            smtp_port=mail["MAIL_SMTP_PORT"],
         )
-    else:
-        logger.info("Email skipped: QQ_MAIL_ADDRESS or QQ_MAIL_AUTH_CODE not set")
 
-    summary.update(status="completed", core=len(core_papers), peripheral=len(peripheral_papers), email_sent=bool(qq_addr and qq_auth and not skip_email))
+    summary.update(status="completed", core=len(core_papers), peripheral=len(peripheral_papers), email_sent=email_sent)
     save_run_summary(date_str, summary)
 
     # Stage 7: Git push (only in CI unless delegated to workflow)
