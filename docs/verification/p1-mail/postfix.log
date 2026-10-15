@@ -1,0 +1,6 @@
+Oct 14 22:22:05 103ecc3f8712 postfix/submission/smtpd[3048]: 4816A12A67C: client=unknown[<TX-public-address>], sasl_method=PLAIN, sasl_username=eai-papers@luonto.me
+Oct 14 22:22:05 103ecc3f8712 postfix/cleanup[3051]: 4816A12A67C: replace: header Received: from [127.0.1.1] (unknown [<TX-public-address>])??(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)?? key-exchange x25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)??( from unknown[<TX-public-address>]; from=<eai-papers@luonto.me> to=<eai-papers@luonto.me> proto=ESMTP helo=<[127.0.1.1]>: Received: from [127.0.0.1] (localhost [127.0.0.1]) by localhost (Mailerdaemon) with ESMTPSA id 4816A12A67C??for <eai-papers@luonto.me>; Wed, 14 Oct 2026 22:22:04 -0400 (EDT)
+Oct 14 22:22:05 103ecc3f8712 postfix/cleanup[3051]: 4816A12A67C: message-id=<179203092192.235.13912102745132107140@luonto.me>
+Oct 14 22:22:06 103ecc3f8712 postfix/qmgr[360]: 4816A12A67C: from=<eai-papers@luonto.me>, size=1312, nrcpt=1 (queue active)
+Oct 14 22:22:06 103ecc3f8712 postfix/lmtp[3052]: 4816A12A67C: to=<eai-papers@luonto.me>, relay=dovecot[172.22.1.250]:24, delay=1.9, delays=1.8/0.02/0.01/0.05, dsn=2.0.0, status=sent (250 2.0.0 <eai-papers@luonto.me> +HjxKc440GpGsgAAvSyl7g Saved)
+Oct 14 22:22:06 103ecc3f8712 postfix/qmgr[360]: 4816A12A67C: removed

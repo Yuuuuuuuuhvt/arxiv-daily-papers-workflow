@@ -1,0 +1,31 @@
+{
+  "headers": {
+    "Message-ID": [
+      "<179203092192.235.13912102745132107140@luonto.me>"
+    ],
+    "Subject": [
+      "arXiv Daily SMTP check 2026-10-14 7b8055cae02844ffb8c5833dac1d07b5"
+    ],
+    "From": [
+      "eai-papers@luonto.me"
+    ],
+    "To": [
+      "eai-papers@luonto.me"
+    ],
+    "Date": [
+      "Thu, 15 Oct 2026 02:22:01 -0000"
+    ],
+    "Authentication-Results": [],
+    "ARC-Authentication-Results": [],
+    "DKIM-Signature": [
+      "v=1; a=rsa-sha256; c=relaxed/relaxed; d=luonto.me; s=dkim;\r\n\tt=1792030926; h=from:subject:date:message-id:to:mime-version:content-type;\r\n\tbh=PZ9o8m3WRySLTQkB5VK2Wxcdlzc+2ONAI+n4EDCyKYs=;\r\n\tb=cinJt9MDXzip8iACUA75pAiobwGFHkW10/H5LWeYU2Z8UCNTu1/okaVXAE8r1TH4zsX2wR\r\n\t1p1tlPw+hKpormMps8tlvruEpa+j00P/cgZc4rAKtsJM4YvjnKokMJtPfoKpUj+bYruM/Y\r\n\tyx6NwJJT+K7GwlJp6LjUAcxWqs905cnQcIl1Nu31fi8/xIZKIrb5Kh4kKBHFl4/OavZCXt\r\n\tKZvvqFxvJ7XS2YnxPLk8RlD+cvyBVGk/ALBpxEz0ePglfMV0HYP7LdjLfFpN7sR/wItcWU\r\n\tQMR2E4UVog6S8MkzP6/zQJKfYe2HjFHUY/oQyq/+Z+dBfqmwMw34xDU/vBisKQ=="
+    ],
+    "Received": [
+      "from mail.luonto.me ([172.22.1.253])\r\n\tby 999d51e46af1 with LMTP\r\n\tid +HjxKc440GpGsgAAvSyl7g\r\n\t(envelope-from <eai-papers@luonto.me>)\r\n\tfor <eai-papers@luonto.me>; Wed, 14 Oct 2026 22:22:06 -0400",
+      "from [127.0.0.1] (localhost [127.0.0.1]) by localhost (Mailerdaemon) with ESMTPSA id 4816A12A67C\r\n\tfor <eai-papers@luonto.me>; Wed, 14 Oct 2026 22:22:04 -0400 (EDT)"
+    ]
+  },
+  "body_matches_report": true,
+  "report_sha256": "caa750e7279e0c8294db629e279b16e9d358dfdf402cb6cbea6ff910ce333cfb",
+  "report_bytes": 300
+}
