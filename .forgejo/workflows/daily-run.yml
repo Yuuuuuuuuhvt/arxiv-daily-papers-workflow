@@ -1,5 +1,7 @@
 name: Daily Papers Agent
 on:
+  schedule:
+    - cron: '30 5 * * 1-5'
   workflow_dispatch:
     inputs:
       report_date:
