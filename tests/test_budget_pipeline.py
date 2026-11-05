@@ -83,16 +83,15 @@ def test_pdf_transport_and_strict_source_handling(monkeypatch, tmp_path):
     config = {"download_enabled": True, "require_pdf": True, "storage_dir": str(tmp_path), "transport": "url"}
     model = {"model_id": "test"}
     async def inspect(**kwargs):
-        assert kwargs["plugins"] == [{"id": "file-parser", "pdf": {"engine": "cloudflare-ai"}}]
+        assert kwargs["plugins"] == [{"id": "file-parser", "pdf": {"engine": "native"}}]
         assert kwargs["messages"][1]["content"][1]["file"]["file_data"] == paper.pdf_url
         return "Full document output"
     monkeypatch.setattr(deep_research, "call_llm", inspect)
     with pytest.raises(FileNotFoundError):
         asyncio.run(deep_research.generate_deep_research(paper, model, "test", config))
     (tmp_path / "sample.pdf").write_bytes(b"%PDF-synthetic")
-    monkeypatch.setattr(deep_research, "_MAX_NATIVE_PDF_BYTES", 5)
     result = asyncio.run(deep_research.generate_deep_research(paper, model, "test", config))
-    assert "PDF 全文解析" in result
+    assert "PDF 原文" in result
     async def failing(**kwargs):
         if "plugins" in kwargs:
             raise RuntimeError("PDF unavailable")
@@ -102,3 +101,39 @@ def test_pdf_transport_and_strict_source_handling(monkeypatch, tmp_path):
         asyncio.run(deep_research.generate_deep_research(paper, model, "test", config))
     result = asyncio.run(deep_research.generate_deep_research(paper, model, "test", {**config, "require_pdf": False}))
     assert "仅论文摘要" in result and "Abstract output" in result
+
+
+def test_large_pdf_reads_every_page_and_rejects_empty_text(monkeypatch, tmp_path):
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    path = tmp_path / "sample.pdf"
+    writer = PdfWriter()
+    for text in ("First page evidence", "Last page evidence"):
+        page = writer.add_blank_page(width=612, height=792)
+        page[NameObject("/Resources")] = DictionaryObject({
+            NameObject("/Font"): DictionaryObject({NameObject("/F1"): DictionaryObject({
+                NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica")})})})
+        stream = DecodedStreamObject()
+        stream.set_data(f"BT /F1 12 Tf 40 720 Td ({text}) Tj ET".encode())
+        page[NameObject("/Contents")] = stream
+    writer.write(path)
+    day = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    paper = ArxivPaper("sample", 1, "Synthetic", "Abstract only", [], [], "cs.RO",
+                       day, day, "https://arxiv.org/pdf/sample", "https://arxiv.org/abs/sample")
+    async def inspect(**kwargs):
+        assert "plugins" not in kwargs and kwargs["stream"] is True
+        content = kwargs["messages"][1]["content"]
+        assert "First page evidence" in content and "Last page evidence" in content
+        return "Full text result"
+    monkeypatch.setattr(deep_research, "call_llm", inspect)
+    monkeypatch.setattr(deep_research, "_MAX_NATIVE_PDF_BYTES", 5)
+    config = {"download_enabled": True, "require_pdf": True, "storage_dir": str(tmp_path)}
+    result = asyncio.run(deep_research.generate_deep_research(paper, {"model_id": "test"}, "test", config))
+    assert "PDF 全部页面" in result and "未直接输入图像像素" in result
+    blank = PdfWriter()
+    blank.add_blank_page(width=612, height=792)
+    blank.write(path)
+    with pytest.raises(ValueError, match="no extractable text"):
+        asyncio.run(deep_research.generate_deep_research(paper, {"model_id": "test"}, "test", config))

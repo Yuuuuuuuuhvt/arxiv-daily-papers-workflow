@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from pathlib import Path
@@ -11,9 +12,20 @@ from .models import ArxivPaper
 
 logger = logging.getLogger(__name__)
 
-# PDFs larger than this use the free text parser instead of native to avoid
-# Gemini processing timeouts on very large documents.
-_MAX_NATIVE_PDF_BYTES = 15 * 1024 * 1024  # 15 MB
+# The provider's URL downloader rejects PDFs above 5 MiB. Keeping inline
+# documents below the same size also avoids large base64 uploads on servers.
+_MAX_NATIVE_PDF_BYTES = 5 * 1024 * 1024
+
+
+def _extract_pdf_text(pdf_path: Path) -> str:
+    """Read every page locally; this does not perform OCR or extract images."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(pdf_path)
+    pages = [page.extract_text(extraction_mode="layout") or "" for page in reader.pages]
+    if not any(page.strip() for page in pages):
+        raise ValueError("PDF has no extractable text; native input or OCR is required")
+    return "\n\n".join(f"Page {i}\n{text}" for i, text in enumerate(pages, 1))
 
 
 def _build_paper_content(paper: ArxivPaper) -> str:
@@ -81,7 +93,22 @@ async def generate_deep_research(
         if source.read(5) != b"%PDF-":
             raise ValueError(f"Invalid PDF header: {paper.arxiv_id}")
     file_size = pdf_path.stat().st_size
-    engine = "native" if file_size <= _MAX_NATIVE_PDF_BYTES else "cloudflare-ai"
+    if file_size > _MAX_NATIVE_PDF_BYTES:
+        # Full local text is preferable to a silent abstract-only fallback.
+        # Extraction runs off the event loop so other streams can keep reading.
+        text = await asyncio.to_thread(_extract_pdf_text, pdf_path)
+        report = await call_llm(
+            model=model_config["model_id"],
+            messages=[
+                {"role": "system", "content": system_prompt +
+                 "\n输入是 PDF 全部页面提取的文本，没有图像像素。请明确说明表格、公式或图片信息的缺失，不补造实验数据或图像细节。"},
+                {"role": "user", "content": text_part + "\n\nPDF 全文：\n" + text},
+            ],
+            temperature=model_config.get("temperature", 0.2),
+            api_key=api_key,
+            stream=True,
+        )
+        return f"> 输入依据：PDF 全部页面提取的正文，未直接输入图像像素。\n\n{report.strip()}"
     # OpenRouter URL downloads reject files larger than 5 MiB. Inline bytes
     # retain the local document and avoid that separate download limit.
     transport = pdf_config.get("transport", "base64")
@@ -99,9 +126,9 @@ async def generate_deep_research(
             "file_data": file_data,
         }},
     ]
-    plugins = [{"id": "file-parser", "pdf": {"engine": engine}}]
-    logger.info("DeepResearch with PDF for %s (engine=%s, %.1f MB)",
-                paper.arxiv_id, engine, file_size / 1e6)
+    plugins = [{"id": "file-parser", "pdf": {"engine": "native"}}]
+    logger.info("DeepResearch with native PDF for %s (%.1f MB)",
+                paper.arxiv_id, file_size / 1e6)
 
     try:
         report = await call_llm(
@@ -114,8 +141,7 @@ async def generate_deep_research(
             api_key=api_key,
             plugins=plugins,
         )
-        source_note = "PDF 原文，包含图表输入" if engine == "native" else "PDF 全文解析，图像细节可能缺失"
-        return f"> 输入依据：{source_note}。\n\n{report.strip()}"
+        return f"> 输入依据：PDF 原文，包含图表输入。\n\n{report.strip()}"
     except BudgetExceeded:
         raise
     except Exception as exc:
