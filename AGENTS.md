@@ -6,7 +6,7 @@
 
 - **技术栈**: Python 3.11+, asyncio, httpx, Jinja2, PyYAML, feedparser, arxiv
 - **LLM 网关**: OpenRouter (openrouter.ai) — 所有 LLM 调用经此路由
-- **部署**: GitHub Actions (定时 cron) + 本地调试
+- **部署**: 独立 Python 命令、Linux systemd 用户服务，以及可选的 GitHub Actions。维护者的生产发布配置位于 `.forgejo/`。
 
 ---
 
@@ -92,7 +92,7 @@ data/                       # Runtime data (gitignored, or git submodule)
 
 ### Configuration
 
-- **All tunable parameters live in `config/config.yaml`** — never hardcode model IDs, thresholds, batch sizes, or keyword lists in source code.
+- **Tunable parameters live in `config/config.yaml`**. `PAPERS_CONFIG` selects an instance-specific YAML file; `PAPERS_DATA_DIR` selects persistent report and index storage. The `--quick-start` preset deliberately caps trials at two candidates and suppresses external side effects other than model calls.
 - **Prompts are plain text files** in `prompts/` — loaded at runtime via `config.load_prompt()`. Edit prompts to adjust LLM behavior without touching code.
 - **Environment variables**: `OPENROUTER_API_KEY` (required), `MAIL_SMTP_HOST`、`MAIL_SMTP_PORT`、`MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM`、`MAIL_TO`，六项齐全时通过 STARTTLS 发信，缺项只跳过邮件, `SKIP_DEEP_RESEARCH` (optional flag).
 
@@ -108,6 +108,8 @@ data/                       # Runtime data (gitignored, or git submodule)
 ```powershell
 # Local run (requires OPENROUTER_API_KEY)
 $env:OPENROUTER_API_KEY = "sk-or-v1-..."
+python -m src.main --check
+python -m src.main --quick-start
 python -m src.main
 
 # Skip DeepResearch stage (faster, cheaper)
@@ -157,7 +159,7 @@ pytest tests/ -v
 
 3. **`papers_index.json` is the single source of truth for dedup**: If this file is corrupted or deleted, all papers will be re-processed. The file has a `.bak` backup created on every save.
 
-4. **Git push only runs in CI** (`GITHUB_ACTIONS` env var check). The workflow YAML also has its own git push step — both exist for redundancy but the YAML step is authoritative.
+4. **Git push only runs when `GITHUB_ACTIONS` is set and `SKIP_GIT_PUSH` is not enabled**. Publishing workflows set `SKIP_GIT_PUSH=1` and own their Git steps. The trial preset always suppresses Git pushes. Independent systemd deployment is described in `docs/self-hosting.md`.
 
 5. **`analyze_all()` and `generate_all_deep_research()`** are legacy serial wrappers — unused by `main.py` which implements its own concurrent versions. They exist for potential standalone/testing use but are effectively dead code in the pipeline.
 

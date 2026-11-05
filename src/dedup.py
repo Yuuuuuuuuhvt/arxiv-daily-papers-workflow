@@ -20,6 +20,7 @@ def load_index(path: Path) -> dict:
 
 
 def save_index(index: dict, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         backup = Path(str(path) + ".bak")
         shutil.copy2(path, backup)

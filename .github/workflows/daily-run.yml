@@ -54,6 +54,7 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
           SKIP_GIT_PUSH: "1"
+          PDF_RELEASE_BASE_URL: ${{ github.server_url }}/${{ github.repository }}
         run: python -m src.main
 
       - name: Upload PDF release assets

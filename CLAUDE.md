@@ -15,6 +15,10 @@ python -m pip install pytest
 python -m src.main
 python -m src
 
+# Validate local settings without network access, then try at most two candidates.
+python -m src.main --check
+python -m src.main --quick-start
+
 # Skip the expensive DeepResearch stage.
 SKIP_DEEP_RESEARCH=1 python -m src.main
 
@@ -36,7 +40,7 @@ On PowerShell, set runtime flags with `$env:NAME = 'value'`, then run `python -m
 
 ## Architecture
 
-This repository is a fully automated arXiv paper discovery pipeline for Embodied AI, World Models, and Autonomous Driving. The scheduled GitHub Actions workflow runs on weekdays at UTC 05:30.
+This repository is an arXiv paper discovery pipeline for Embodied AI, World Models, and Autonomous Driving. It runs independently of CI. `deploy/systemd/` provides a Linux user service and a weekday timer at UTC 05:30; `docs/self-hosting.md` describes installation. `.github/workflows/quick-start.yml` provides an optional trial. The older publishing workflows depend on maintainer infrastructure.
 
 The pipeline is sequentially orchestrated by `src/main.py::run_pipeline()`:
 
@@ -57,14 +61,14 @@ Fetch API and RSS -> Dedup -> Relevance Filter -> Deep Analysis -> PDF Download
 
 ### Configuration and prompts
 
-- Runtime configuration lives in `config/config.yaml`: arXiv categories, research directions, model IDs, scoring weights, email settings, concurrency, PDF settings, and hjfy link settings.
+- Runtime configuration defaults to `config/config.yaml`. `PAPERS_CONFIG` selects a separate instance YAML file containing arXiv categories, research directions, model IDs, scoring weights, email settings, concurrency, PDF settings, and hjfy link settings.
 - Prompt text lives in `prompts/` and is loaded with `config.load_prompt()`. Change LLM behavior through prompt files and model settings before changing Python code.
 - The OpenRouter client is centralized in `src/llm_client.py`. It retries 429 and 5xx or transport failures three times with 2, 4, and 8 second backoff.
 - Data models are dataclasses in `src/models.py`. Keep dependencies minimal and avoid adding Pydantic unless the project direction changes.
 
 ### Data layout
 
-`data/` is a git submodule backed by a separate data repository. It contains `papers_index.json`, generated reports under `data/reports/YYYY-MM-DD.md`, and downloaded PDFs under `data/pdfs/<date>/`. Local runs skip remote git pushes unless CI-related environment variables are set.
+`PAPERS_DATA_DIR` selects the persistent index, reports, and run metadata directory. It defaults to `data/`, which is a maintainer data submodule; independent instances can use an ordinary directory without initializing that submodule. PDFs follow `pdf.storage_dir` separately. Local runs skip remote Git pushes unless CI-related environment variables are set. Release links require an explicit `PDF_RELEASE_BASE_URL` and a separate publisher.
 
 ## Coding Conventions
 

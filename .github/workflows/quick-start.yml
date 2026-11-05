@@ -1,0 +1,37 @@
+name: Try Papers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  try-papers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PAPERS_DATA_DIR: ${{ github.workspace }}/storage/try-papers
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Check setup
+        run: python -m src.main --check
+      - name: Generate a small report
+        run: python -m src.main --quick-start
+      - name: Save report and run metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-trial
+          path: storage/try-papers/
+          if-no-files-found: warn
+          retention-days: 7

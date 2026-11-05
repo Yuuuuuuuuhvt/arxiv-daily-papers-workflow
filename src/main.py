@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import logging
 import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,39 +46,75 @@ def setup_logging() -> None:
     root.setLevel(logging.INFO)
 
 
-def save_run_summary(date_str: str, summary: dict) -> None:
-    directory = DATA_DIR / "run-metadata"
+def save_run_summary(date_str: str, summary: dict, data_dir: Path | None = None) -> None:
+    directory = (data_dir if data_dir is not None else DATA_DIR) / "run-metadata"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / f"{date_str}.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def save_empty_run(date_str: str, status: str, config: dict, summary: dict) -> None:
+def save_empty_run(date_str: str, status: str, config: dict, summary: dict, data_dir: Path | None = None) -> None:
     # 重复补跑没有新论文时，已发布日报仍是当天的完整分析结果。
     # 已有摘要同样保留；只有旧日报缺少摘要时才记录本次空尝试。
-    report_path = DATA_DIR / "reports" / f"{date_str}.md"
+    data_dir = data_dir if data_dir is not None else DATA_DIR
+    report_path = data_dir / "reports" / f"{date_str}.md"
     if report_path.is_file():
         logging.getLogger("pipeline").info("Retaining existing report for %s after %s", date_str, status)
-        if not (DATA_DIR / "run-metadata" / f"{date_str}.json").is_file():
-            save_run_summary(date_str, {**summary, "status": status, "retained_existing_report": True})
+        if not (data_dir / "run-metadata" / f"{date_str}.json").is_file():
+            save_run_summary(date_str, {**summary, "status": status, "retained_existing_report": True}, data_dir)
         return
-    save_report(generate_daily_report(date_str, [], [], {}, {}, config), date_str)
+    save_report(generate_daily_report(date_str, [], [], {}, {}, config), date_str, data_dir)
     summary["status"] = status
-    save_run_summary(date_str, summary)
+    save_run_summary(date_str, summary, data_dir)
 
 
-async def run_pipeline() -> None:
+async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -> None:
     setup_logging()
     logger = logging.getLogger("pipeline")
 
-    config = load_config()
-    api_key = get_env("OPENROUTER_API_KEY")
-    report_date = os.environ.get("REPORT_DATE", "").strip()
-    if report_date:
-        datetime.strptime(report_date, "%Y-%m-%d")
+    try:
+        config = load_config()
+        api_key = get_env("OPENROUTER_API_KEY")
+        report_date = os.environ.get("REPORT_DATE", "").strip()
+        if report_date and datetime.strptime(report_date, "%Y-%m-%d").strftime("%Y-%m-%d") != report_date:
+            raise ValueError("REPORT_DATE must use YYYY-MM-DD")
+        maximum = int(os.environ.get("MAX_PAPERS", "0"))
+        if maximum < 0:
+            raise ValueError("MAX_PAPERS must be non-negative")
+    except (OSError, ValueError) as exc:
+        logger.error("Setup failed: %s. See README.md for configuration and environment variables.", exc)
+        raise SystemExit(2) from None
+    data_dir = DATA_DIR / "trial" if quick_start else DATA_DIR
+    if check_only:
+        logger.info("Local setup check passed; output directory: %s. Network access, API credentials and write permissions have not been verified.", data_dir)
+        return
+    if quick_start:
+        maximum = min(maximum, 2) if maximum else 2
+        logger.info("Quick start: at most %d new papers; no PDF downloads, DeepResearch, email or git pushes", maximum)
     date_str = report_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     summary = {"date": date_str, "query_mode": "submitted-date-utc" if report_date else "hybrid-current", "email_sent": False}
 
-    index_path = DATA_DIR / "papers_index.json"
+    pdf_config = config.get("pdf", {})
+    pdf_dir = None
+    if not quick_start and pdf_config.get("download_enabled", False):
+        pdf_base = Path(pdf_config.get("storage_dir", "storage/pdfs")).expanduser()
+        pdf_dir = (pdf_base if pdf_base.is_absolute() else ROOT_DIR / pdf_base) / date_str
+    index_path = data_dir / "papers_index.json"
+    # Fail on inaccessible storage before making paid calls. Trial output must
+    # never mark papers as processed in the production index.
+    try:
+        directories = [data_dir, data_dir / "reports", data_dir / "run-metadata"]
+        if pdf_dir is not None:
+            directories.append(pdf_dir)
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryFile(dir=directory):
+                pass
+        for path in (index_path, Path(str(index_path) + ".bak"), data_dir / "reports" / f"{date_str}.md", data_dir / "run-metadata" / f"{date_str}.json"):
+            if path.exists() and (not path.is_file() or not os.access(path, os.W_OK)):
+                raise PermissionError(f"Output file is not writable: {path}")
+    except OSError as exc:
+        logger.error("Output setup failed before collection: %s", exc)
+        raise SystemExit(2) from None
     index = load_index(index_path)
 
     # Stage 2: Fetch
@@ -85,21 +123,18 @@ async def run_pipeline() -> None:
     summary["candidates"] = len(candidates)
     if not candidates:
         logger.info("No candidates found.")
-        save_empty_run(date_str, "no_candidates", config, summary)
+        save_empty_run(date_str, "no_candidates", config, summary, data_dir)
         return
 
     # Stage 3: Dedup
     logger.info("=== Stage 3: Deduplication ===")
     new_papers = dedup(candidates, index)
-    maximum = int(os.environ.get("MAX_PAPERS", "0"))
-    if maximum < 0:
-        raise ValueError("MAX_PAPERS must be non-negative")
     if maximum:
         new_papers = new_papers[:maximum]
     summary["new_papers"] = len(new_papers)
     if not new_papers:
         logger.info("No new papers after dedup.")
-        save_empty_run(date_str, "already_indexed", config, summary)
+        save_empty_run(date_str, "already_indexed", config, summary, data_dir)
         return
 
     # Stage 4: Relevance filter (3-tier: core / peripheral / not_relevant)
@@ -112,7 +147,7 @@ async def run_pipeline() -> None:
     all_relevant = core_papers + peripheral_papers
     if not all_relevant:
         logger.info("No relevant papers after filtering.")
-        save_empty_run(date_str, "no_relevant_papers", config, summary)
+        save_empty_run(date_str, "no_relevant_papers", config, summary, data_dir)
         return
 
     # Stage 5: Deep analysis for ALL relevant papers (core + peripheral)
@@ -132,18 +167,13 @@ async def run_pipeline() -> None:
 
     # PDF download (concurrent, for local archival) — core papers only
     downloaded_pdfs = {}
-    pdf_config = config.get("pdf", {})
-    if pdf_config.get("download_enabled", False):
-        pdf_base = Path(pdf_config.get("storage_dir", "data/pdfs"))
-        if not pdf_base.is_absolute():
-            pdf_base = ROOT_DIR / pdf_config.get("storage_dir", "storage/pdfs")
-        pdf_dir = pdf_base / date_str
+    if pdf_dir is not None:
         logger.info("=== Downloading PDFs to %s ===", pdf_dir)
         downloaded_pdfs = await download_all_pdfs(core_papers, pdf_dir)
         pdf_config = {**pdf_config, "storage_dir": str(pdf_dir)}
 
     # Stage 5b: DeepResearch — CORE papers only (with full PDF)
-    skip_deep_research = os.environ.get("SKIP_DEEP_RESEARCH", "").strip().lower() in ("1", "true", "yes")
+    skip_deep_research = quick_start or os.environ.get("SKIP_DEEP_RESEARCH", "").strip().lower() in ("1", "true", "yes")
     deep_research_reports: dict[str, str] = {}
 
     if not skip_deep_research:
@@ -165,7 +195,7 @@ async def run_pipeline() -> None:
         research_results = await asyncio.gather(*[_research_one(p) for p in core_papers])
         deep_research_reports = {k: v for k, v in research_results if v}
     else:
-        logger.info("=== Stage 5b: DeepResearch skipped (SKIP_DEEP_RESEARCH=1) ===")
+        logger.info("=== Stage 5b: DeepResearch skipped ===")
 
     # Save index
     core_ids = {p.arxiv_id for p in core_papers}
@@ -184,17 +214,17 @@ async def run_pipeline() -> None:
         date_str, core_papers, peripheral_papers, analyses, deep_research_reports,
         {**config, "downloaded_pdf_ids": list(downloaded_pdfs)}
     )
-    save_report(report_md, date_str)
+    save_report(report_md, date_str, data_dir)
 
     # Stage 7: Email
     logger.info("=== Stage 7: Email ===")
     mail_keys = ("MAIL_SMTP_HOST", "MAIL_SMTP_PORT", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_FROM", "MAIL_TO")
     mail = {key: get_env(key, required=False) for key in mail_keys}
     missing = [key for key, value in mail.items() if not value]
-    skip_email = os.environ.get("SKIP_EMAIL", "").strip().lower() in ("1", "true", "yes")
+    skip_email = quick_start or os.environ.get("SKIP_EMAIL", "").strip().lower() in ("1", "true", "yes")
     email_sent = False
     if skip_email:
-        logger.info("Email skipped: SKIP_EMAIL=1")
+        logger.info("Email skipped by run options")
     elif missing:
         logger.info("Email skipped: missing %s", ", ".join(missing))
     else:
@@ -212,10 +242,10 @@ async def run_pipeline() -> None:
         )
 
     summary.update(status="completed", core=len(core_papers), peripheral=len(peripheral_papers), email_sent=email_sent)
-    save_run_summary(date_str, summary)
+    save_run_summary(date_str, summary, data_dir)
 
     # Stage 7: Git push (only in CI unless delegated to workflow)
-    skip_git_push = os.environ.get("SKIP_GIT_PUSH", "").strip().lower() in ("1", "true", "yes")
+    skip_git_push = quick_start or os.environ.get("SKIP_GIT_PUSH", "").strip().lower() in ("1", "true", "yes")
     if os.environ.get("GITHUB_ACTIONS") and not skip_git_push:
         logger.info("=== Stage 7: Git push ===")
         commit_and_push_data(date_str)
@@ -229,7 +259,11 @@ async def run_pipeline() -> None:
 
 
 def main() -> None:
-    asyncio.run(run_pipeline())
+    parser = argparse.ArgumentParser(description="Generate an arXiv paper report locally or from a scheduler.")
+    parser.add_argument("--check", action="store_true", help="Check local configuration without network requests or file writes")
+    parser.add_argument("--quick-start", action="store_true", default=os.environ.get("PAPERS_QUICK_START", "").strip().lower() in ("1", "true", "yes"), help="Process at most two new papers in a separate trial directory without PDFs, DeepResearch, email or git pushes; model API calls still incur charges")
+    args = parser.parse_args()
+    asyncio.run(run_pipeline(quick_start=args.quick_start, check_only=args.check))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 
@@ -8,14 +9,50 @@ import yaml
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT_DIR / "config"
-DATA_DIR = ROOT_DIR / "data"
+DATA_DIR = Path(os.environ.get("PAPERS_DATA_DIR", str(ROOT_DIR / "data"))).expanduser().resolve()
 PROMPTS_DIR = ROOT_DIR / "prompts"
 TEMPLATES_DIR = ROOT_DIR / "templates"
 
 
 def load_config() -> dict:
-    with open(CONFIG_DIR / "config.yaml", "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    path = Path(os.environ.get("PAPERS_CONFIG", str(CONFIG_DIR / "config.yaml"))).expanduser()
+    try:
+        with path.open(encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Invalid YAML in {path}; check the configuration syntax") from exc
+    if not isinstance(config, dict):
+        raise ValueError("Configuration must be a YAML mapping")
+    for section in ("arxiv", "research_directions", "models", "scoring"):
+        if not isinstance(config.get(section), dict):
+            raise ValueError(f"Configuration section {section} must be a mapping")
+    if not config["research_directions"]:
+        raise ValueError("Configure at least one research direction")
+    for name, direction in config["research_directions"].items():
+        if not isinstance(direction, dict):
+            raise ValueError(f"research_directions.{name} must be a mapping")
+    for stage in ("relevance_filter", "deep_analysis"):
+        model = config["models"].get(stage)
+        if not isinstance(model, dict) or not isinstance(model.get("model_id"), str) or not model["model_id"].strip():
+            raise ValueError(f"Configure models.{stage}.model_id")
+        batch_size = model.get("batch_size", 1)
+        if type(batch_size) is not int or batch_size < 1:
+            raise ValueError(f"models.{stage}.batch_size must be a positive integer")
+    weights = config["scoring"].get("weights")
+    if not isinstance(weights, dict):
+        raise ValueError("scoring.weights must be a mapping")
+    for name in ("novelty", "impact", "reproducibility", "affiliation", "direction_match"):
+        value = weights.get(name)
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError(f"scoring.weights.{name} must be a finite number")
+    concurrency = config.get("concurrency", {})
+    if not isinstance(concurrency, dict):
+        raise ValueError("Configuration section concurrency must be a mapping")
+    for name in ("max_concurrent_llm", "max_concurrent_pdf"):
+        value = concurrency.get(name, 1)
+        if type(value) is not int or value < 1:
+            raise ValueError(f"concurrency.{name} must be a positive integer")
+    return config
 
 
 def load_affiliations() -> dict:
@@ -36,5 +73,8 @@ def get_env(key: str, required: bool = True) -> str:
 
 
 def release_pdf_url(date_str: str, arxiv_id: str) -> str:
-    base = os.environ.get("PDF_RELEASE_BASE_URL", "https://git.luonto.me/yurun/arxiv-daily-papers-workflow").rstrip("/")
+    base = os.environ.get("PDF_RELEASE_BASE_URL", "").strip().rstrip("/")
+    # Downloading a local PDF does not publish it to a release server.
+    if not base:
+        return ""
     return f"{base}/releases/download/v{date_str}/{arxiv_id}.pdf"

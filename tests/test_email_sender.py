@@ -95,7 +95,7 @@ def test_pipeline_keeps_report_and_records_actual_mail_outcome(monkeypatch, tmp_
     monkeypatch.setattr(main, "paper_to_index_entry", lambda *args, **kwargs: {})
     monkeypatch.setattr(main, "save_index", lambda *args: None)
     monkeypatch.setattr(main, "generate_daily_report", lambda *args: "完整日报")
-    monkeypatch.setattr(main, "save_report", lambda body, date: (tmp_path / "report.md").write_text(body))
+    monkeypatch.setattr(main, "save_report", lambda body, date, data_dir=None: (tmp_path / "report.md").write_text(body))
     monkeypatch.setattr(main, "generate_email_html", lambda *args: "<p>日报</p>")
     calls = []
     def sender(**kwargs):

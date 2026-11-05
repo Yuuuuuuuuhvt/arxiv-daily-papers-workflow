@@ -102,8 +102,8 @@ def generate_daily_report(
     return template.render(**ctx)
 
 
-def save_report(content: str, date_str: str) -> Path:
-    reports_dir = DATA_DIR / "reports"
+def save_report(content: str, date_str: str, data_dir: Path | None = None) -> Path:
+    reports_dir = (data_dir if data_dir is not None else DATA_DIR) / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     path = reports_dir / f"{date_str}.md"
     path.write_text(content, encoding="utf-8")

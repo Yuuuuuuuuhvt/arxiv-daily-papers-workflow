@@ -48,11 +48,14 @@ def test_backfill_failure_is_not_an_empty_day(monkeypatch):
         fetcher.fetch_api({"arxiv": {}, "research_directions": {"test": {"title_keywords": ["robot"]}}}, "2026-10-09")
 
 
-def test_release_url_uses_real_report_date():
+def test_release_url_uses_real_report_date(monkeypatch):
     paper = SimpleNamespace(arxiv_id="2610.01234", title="Paper", authors=[], abs_url="https://arxiv.org/abs/2610.01234", pdf_url="https://arxiv.org/pdf/2610.01234")
+    monkeypatch.delenv("PDF_RELEASE_BASE_URL", raising=False)
+    assert release_pdf_url("2026-10-09", paper.arxiv_id) == ""
+    monkeypatch.setenv("PDF_RELEASE_BASE_URL", "https://example.test/reader/papers/")
     view = report_generator._paper_view(paper, AnalysisResult(), "https://example.test/{arxiv_id}", "2026-10-09", "research")
     assert view["release_pdf_url"] == release_pdf_url("2026-10-09", paper.arxiv_id)
-    assert view["release_pdf_url"].startswith("https://git.luonto.me/")
+    assert view["release_pdf_url"] == "https://example.test/reader/papers/releases/download/v2026-10-09/2610.01234.pdf"
     assert view["deep_research"] == "research"
 
     assert report_generator._paper_view(paper, AnalysisResult(), "https://example.test/{arxiv_id}", "2026-10-09", pdf_available=False)["release_pdf_url"] == ""

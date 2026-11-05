@@ -1,0 +1,14 @@
+[Unit]
+Description=Generate the daily arXiv paper report
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/arxiv-daily-papers/environment
+Environment=SKIP_GIT_PUSH=1
+StandardOutput=append:%h/.local/state/arxiv-daily-papers/service.log
+StandardError=inherit
+ExecStartPre=/usr/bin/env --chdir=${PAPERS_APP_DIR} ${PAPERS_APP_DIR}/.venv/bin/python -m src.main --check
+ExecStart=/usr/bin/env --chdir=${PAPERS_APP_DIR} ${PAPERS_APP_DIR}/.venv/bin/python -m src.main
+TimeoutStartSec=3h
+UMask=0077
+Nice=10

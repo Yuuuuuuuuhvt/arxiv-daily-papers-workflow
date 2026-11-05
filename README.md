@@ -1,149 +1,116 @@
 # arXiv Daily Papers Workflow
 
-This repository contains the automation code for the daily arXiv paper workflow. It fetches papers related to embodied AI, world models, and autonomous driving, deduplicates them against a data submodule, filters relevance with an LLM, generates structured Markdown reports, optionally sends an email digest, and updates the data repository.
+Collect arXiv papers, filter them against research interests, and generate scored Markdown reports with optional PDF analysis and email digests. The supplied profile focuses on embodied AI, world models, and autonomous driving. Analysis prompts currently produce Chinese text.
 
-## Pipeline
+The pipeline runs as a normal Python command. You can run it locally, schedule it on a Linux server such as a Jetson AGX, or try it through GitHub Actions. A GitHub account, Git write token, email account, and the maintainer's data repository are not required for local or server use.
 
-| Stage | Module | Output |
-|---|---|---|
-| Configuration loading | `src/config.py` | Parsed research directions, model settings, scoring weights, email settings, and PDF settings |
-| Paper fetching | `src/fetcher.py` | Candidate papers from arXiv RSS and API searches |
-| Deduplication | `src/dedup.py` | Papers not already present in `data/papers_index.json` |
-| Relevance filtering | `src/relevance_filter.py` | Direction labels and relevance decisions from the filter prompt |
-| Deep analysis | `src/deep_analysis.py` | Structured paper scores and analysis fields |
-| Deep research | `src/deep_research.py` | Longer academic interpretation generated from `prompts/deep_research.txt` |
-| Report generation | `src/report_generator.py` | Markdown daily report rendered from `templates/daily_report.md.j2` |
-| Email digest | `src/email_sender.py` | Optional HTML digest rendered from `templates/email_digest.html.j2` |
-| Git update | `src/git_ops.py` | Data submodule commit and root submodule pointer update |
+## 1. First local run
 
-The command entry points are `python -m src.main` and `python -m src`.
+You need Python 3.11 or newer, access to arXiv and OpenRouter, and your own [OpenRouter API key](https://openrouter.ai/settings/keys). Model calls incur charges. Check the model IDs in `config/config.yaml` against your account's available models before running.
 
-## Repository Layout
-
-| Path | Purpose |
-|---|---|
-| `.github/workflows/daily-run.yml` | Weekday GitHub Actions schedule and manual dispatch workflow |
-| `config/config.yaml` | arXiv categories, research directions, keyword rules, OpenRouter model choices, scoring weights, email settings, concurrency, PDF behavior, and hjfy link behavior |
-| `config/affiliations.json` | Institution ranking and affiliation metadata used during scoring |
-| `prompts/` | LLM prompts for relevance filtering, deep analysis, and deep research interpretation |
-| `src/` | Python implementation of the workflow |
-| `templates/` | Markdown and HTML Jinja templates |
-| `tests/` | Unit tests for deduplication, fetching, and relevance filtering |
-| `data/` | Git submodule that stores generated reports, PDFs, and `papers_index.json` |
-
-## Local Setup
-
-Use Python 3.11 or newer.
+Clone the code without initializing submodules:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+git clone https://github.com/Yuuuuuuuuhvt/arxiv-daily-papers-workflow.git
+cd arxiv-daily-papers-workflow
 ```
 
-PowerShell users can set the required OpenRouter key locally.
+On macOS or Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+export OPENROUTER_API_KEY='your-openrouter-key'
+export PAPERS_DATA_DIR="$PWD/storage/data"
+python -m src.main --check
+python -m src.main --quick-start
+```
+
+On Windows PowerShell:
 
 ```powershell
-$env:OPENROUTER_API_KEY = "sk-or-v1-..."
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:OPENROUTER_API_KEY = 'your-openrouter-key'
+$env:PAPERS_DATA_DIR = Join-Path $PWD 'storage/data'
+.\.venv\Scripts\python.exe -m src.main --check
+.\.venv\Scripts\python.exe -m src.main --quick-start
 ```
 
-macOS and Linux users can set the same value through the shell.
+`--check` validates local configuration and the presence of the API key without making network requests or writing data. It does not verify API authentication, model availability, or filesystem write permissions.
 
-```bash
-export OPENROUTER_API_KEY="sk-or-v1-..."
-```
+`--quick-start` processes at most two new candidate papers. It skips PDF downloads, DeepResearch, email, and Git pushes, even if those features are configured. Filtering and structured analysis still call OpenRouter. A smaller nonzero `MAX_PAPERS` limit is respected. The candidate limit is not a currency budget, and a run can produce an empty report if neither candidate is relevant.
 
-邮件推送为可选功能。六项 SMTP 环境变量齐全时通过 STARTTLS 发信，参数见下表。认证用户名、发件地址与收件地址分别配置，不要求三者相同。
+With the commands above, trial results are stored under `storage/data/trial`. A full run writes directly under `storage/data`, so the trial cannot overwrite production reports or mark production papers as already processed.
 
-## Run Locally
+| Path | Content |
+| --- | --- |
+| `reports/YYYY-MM-DD.md` | Daily report |
+| `papers_index.json` | Persistent index used to avoid processing papers again |
+| `run-metadata/YYYY-MM-DD.json` | Collection counts and processing outcome |
+
+The default report date uses UTC. Keep the data directory between runs to preserve deduplication. An empty retry preserves an existing report for the same date. Rejected papers are not indexed, so repeated limited trials can select the same rejected candidates; trial mode is a setup check, not a continuous subscription. Model stages can fall back to default analysis after API failures, so inspect the logs and report content before treating a run as successful model analysis.
+
+## 2. Run on your own server
+
+Follow [the self-hosting guide](docs/self-hosting.md) to configure the supplied systemd service and weekday timer. The service can use a separate disk for configuration, reports, the index, and PDF storage. It does not need a GitHub Actions runner or GPU access.
+
+The same command runs one full collection locally or from another scheduler:
 
 ```bash
 python -m src.main
 ```
 
-Local runs can generate reports and update local data files. When the workflow runs in GitHub Actions, it checks out the `data` submodule, uses `PAT_TOKEN` for write access, runs the pipeline, commits data changes, and then updates the root submodule pointer when needed.
+Full runs follow the PDF settings in YAML and enable DeepResearch unless disabled through the environment. Email is sent only when all six SMTP settings are present and `SKIP_EMAIL` is not enabled. Local runs do not push to Git. Set `SKIP_GIT_PUSH=1` when using an external CI scheduler that sets `GITHUB_ACTIONS`.
 
-## GitHub Actions
+## 3. Configure an instance
 
-The workflow runs on weekdays at UTC 05:30, which corresponds to Beijing time 13:30. Manual dispatch is also enabled.
+`config/config.yaml` contains research directions, keyword rules, model IDs, scoring weights, PDF settings, and concurrency. Set `PAPERS_CONFIG` to use an instance-specific YAML copy without editing the checkout. Changing keywords within an existing direction only requires YAML changes; adding a new direction also requires updating `prompts/relevance_filter.txt` and `DIRECTION_DISPLAY` in `src/report_generator.py`.
 
-Required repository secrets are:
+| Variable | Purpose and default |
+| --- | --- |
+| `OPENROUTER_API_KEY` | Required for collection and `--check` |
+| `PAPERS_CONFIG` | YAML file; defaults to the checkout's `config/config.yaml` |
+| `PAPERS_DATA_DIR` | Report and index directory; defaults to the checkout's `data` directory |
+| `PAPERS_QUICK_START` | Set to `1` to use the isolated trial mode from a service environment file |
+| `MAX_PAPERS` | Maximum new candidates per run; `0` means no limit |
+| `REPORT_DATE` | Optional UTC first-submission date in `YYYY-MM-DD` format |
+| `SKIP_DEEP_RESEARCH` | Set to `1` to skip extended PDF-based analysis |
+| `SKIP_EMAIL` | Set to `1` to suppress email |
+| `SKIP_GIT_PUSH` | Set to `1` to suppress the in-process CI Git push path |
+| `PDF_RELEASE_BASE_URL` | Optional repository URL for externally published PDF attachments; unset means no release links |
 
-| Secret | Purpose |
-|---|---|
-| `OPENROUTER_API_KEY` | LLM calls through OpenRouter |
-| `PAT_TOKEN` | Push access to both this repository and the data submodule repository |
-| `MAIL_SMTP_HOST` | SMTP 主机，当前为 `mail.luonto.me` |
-| `MAIL_SMTP_PORT` | STARTTLS 端口，当前为 `587` |
-| `MAIL_USERNAME` | SMTP 登录用户名，当前为 `eai-papers@luonto.me` |
-| `MAIL_PASSWORD` | SMTP 登录口令，仅保存到私有 secret 与 Actions secrets |
-| `MAIL_FROM` | 发件地址，当前为 `eai-papers@luonto.me` |
-| `MAIL_TO` | 单个收件地址，当前为 `eai-papers@luonto.me` |
+Relative `PAPERS_CONFIG` and `PAPERS_DATA_DIR` paths resolve from the process working directory. Use absolute paths for a scheduled service. PDF downloads use the separate `pdf.storage_dir` YAML setting, which resolves relative paths from the code checkout; use an absolute path to place PDFs on another disk.
 
-The workflow sets `SKIP_GIT_PUSH=1` during the Python pipeline and handles commits explicitly in later shell steps. This keeps Git side effects visible in the workflow file.
+Real collection prepares the output directories and checks that they can be written before making network requests. The read-only `--check` command intentionally does not create these directories.
 
-## Configuration
+Email is optional. Configure all of `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, and `MAIL_TO` to use SMTP with STARTTLS. Missing settings skip email. The username, sender, and recipient may differ. An `email_sent` result means SMTP accepted the message, not that it reached the inbox.
 
-Research directions are defined in `config/config.yaml`. Each direction can use title keywords, abstract keywords, abstract keyword combinations, and arXiv categories. The current focus favors world models that support embodied AI downstream tasks, including manipulation, locomotion, planning, VLA models, diffusion policies, model based reinforcement learning, latent dynamics, and sim to real work.
+Keep secrets in your shell environment or a private service environment file. This project does not automatically load `.env` files. Do not put keys in YAML or commit private environment files.
 
-Model settings are also in `config/config.yaml`. The relevance filter currently uses a fast model, while deep analysis uses a stronger model one paper at a time. Concurrency limits for LLM and PDF work are configured separately.
+## 4. Try through GitHub Actions
 
-## Tests
+1. Fork this repository and enable Actions in your fork.
+2. Add `OPENROUTER_API_KEY` under Settings > Secrets and variables > Actions.
+3. Select Actions > Try Papers > Run workflow.
+4. Open the completed run and download the `paper-trial` artifact to read the report and metadata.
+
+The [Try Papers workflow](.github/workflows/quick-start.yml) uses `--quick-start`, needs only that secret, and has read-only repository permissions. It does not initialize the data submodule, send email, publish releases, or push commits. Its files are retained for seven days. Each run starts with a new index, so it is a trial rather than a persistent daily subscription.
+
+GitHub requires a manually dispatched workflow to exist on the default branch. See [manual workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) and [workflow artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data).
+
+The older `daily-run.yml`, `.forgejo/` workflows, and `.gitmodules` describe the maintainer's publishing setup. They are not ready-made deployment settings for a new fork. See [maintainer deployment](docs/maintainer-deployment.md) before using them.
+
+## 5. Development and verification
+
+The pipeline is implemented in `src/main.py`: fetch, deduplicate, filter, analyze, download PDFs, run DeepResearch, render reports, optionally email, and optionally publish through a scheduler. Prompts live in `prompts/`; Jinja templates live in `templates/`.
+
+Install pytest into the same virtual environment, then run tests for the area you change:
 
 ```bash
-pip install pytest
-pytest tests -v
+python -m pip install pytest
+python -m pytest tests/test_onboarding.py tests/test_migration.py -q
 ```
 
-The unit tests cover deterministic parts of the pipeline. End to end behavior still depends on network access, arXiv availability, model API responses, configured secrets, and the state of the `data` submodule.
-
-## Data Policy
-
-The code repository should stay small. Generated reports, downloaded PDFs, and the cumulative `papers_index.json` belong in the `data/` submodule. API keys, mail authorization codes, and personal access tokens must stay in local environment variables or GitHub Actions secrets.
-
-## Forgejo production workflow and backfill
-
-Production now uses `.forgejo/workflows/daily-run.yml` on the TX Linux Runner.
-The `PAPERS_WRITE_TOKEN` secret supplies `FORGEJO_PAPERS_TOKEN`, which grants write access only to this code repository and the
-`embodied-daily-papers` data repository. The pipeline, PDF release attachments,
-data push and submodule pointer push all use Forgejo. The retained GitHub workflow
-stays disabled during migration.
-
-生产邮件使用上表的六个 Forgejo Actions secrets，来源为 recitativo 的
-`secret/mail/eai-papers.env`。任一变量缺失时仅跳过邮件，采集、报告、PDF 发布和数据更新继续执行。
-`SKIP_EMAIL=1` 显式禁用邮件。无效端口、TLS、认证或发送失败会记录错误并令
-`data/run-metadata` 中的 `email_sent` 为 false，不删除已生成的报告。
-SMTP 使用系统证书校验和 30 秒连接及套接字操作超时，不自动重试以避免重复投递。
-TX 的 Runner 使用 host 网络，邮件域名由 `DOMAIN,mail.luonto.me,DIRECT` 规则直连。
-邮箱配额为 1024 MiB，本域收发不经过 SES 外部中继。
-
-SMTP 调用依据 [Python smtplib 文档](https://docs.python.org/3/library/smtplib.html#smtplib.SMTP.starttls)，
-先建立 TLS，再重新 EHLO 并认证。`email_sent` 仅表示 SMTP 接受提交，实际收件仍须经邮箱回读验证。
-
-Manual input `report_date` selects a UTC first-submission date in `YYYY-MM-DD`
-format. Historical runs query every page for that date and do not combine the
-current RSS feed with historical results. API failures fail the run instead of
-being recorded as empty days. The resulting report and `data/run-metadata` record
-include the requested date and processing outcome. A weekday run without an
-explicit date retains the current API/RSS feed behavior.
-An empty retry preserves an existing report and its corresponding run summary.
-A legacy report without a summary receives a `retained_existing_report` marker
-in the newly recorded attempt summary.
-
-The `validation` input limits analysis to two new papers, skips DeepResearch,
-email, release uploads and production pushes. It verifies real collection and
-analysis in an isolated job checkout before production scheduling is accepted.
-
-Historical collection selects the first UTC submission date and analyzes the
-currently available arXiv version. It does not reconstruct past RSS entries or
-past versions. Backfill uses skip_email to prevent delayed notification bursts.
-PDF attachments are verified against existing files and published to both
-Forgejo and the GitHub fallback before production data commits.
-
-
-## 日报邮件独立验证
-
-手动运行 `.forgejo/workflows/mail-check.yml`，输入已有日报日期 `report_date`。
-作业只读取该日报并发送一封验证邮件，不调用模型，不发布附件，不写入生产分支。
-当前收发使用同一邮箱，作业通过 IMAP 993 回读 INBOX，核对完整正文并输出认证邮件头。
-SMTP 提交成功与收件确认分别验证，域内认证结果按实际邮件头记录，不等同于外域投递认证。
+These tests cover local startup, isolated storage, trial side effects, report links, and historical collection behavior. They do not establish real API authentication, model quality, email delivery, or hosted scheduler operation.

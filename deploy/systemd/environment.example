@@ -1,0 +1,16 @@
+# Use absolute paths. systemd EnvironmentFile does not expand $HOME or ~.
+PAPERS_APP_DIR=/opt/arxiv-daily-papers
+PAPERS_CONFIG=/opt/arxiv-daily-papers/config/config.yaml
+PAPERS_DATA_DIR=/var/lib/arxiv-daily-papers
+OPENROUTER_API_KEY=
+
+# Trial mode uses a separate trial directory and never sends email or publishes.
+# Set PAPERS_QUICK_START=0 and SKIP_DEEP_RESEARCH=0 for full analysis.
+PAPERS_QUICK_START=1
+MAX_PAPERS=0
+SKIP_DEEP_RESEARCH=1
+SKIP_EMAIL=1
+SKIP_GIT_PUSH=1
+
+# Enable only if this instance also publishes PDFs to this release repository.
+# PDF_RELEASE_BASE_URL=https://github.com/your-account/your-repository

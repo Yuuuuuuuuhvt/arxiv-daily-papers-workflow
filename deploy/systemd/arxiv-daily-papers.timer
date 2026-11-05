@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the arXiv paper report on weekdays
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 05:30:00 UTC
+Persistent=true
+Unit=arxiv-daily-papers.service
+
+[Install]
+WantedBy=timers.target
