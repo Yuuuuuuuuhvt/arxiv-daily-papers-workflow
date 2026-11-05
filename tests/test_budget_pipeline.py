@@ -111,14 +111,13 @@ def test_large_pdf_reads_every_page_and_rejects_empty_text(monkeypatch, tmp_path
     writer = PdfWriter()
     for text in ("First page evidence", "Last page evidence"):
         page = writer.add_blank_page(width=612, height=792)
-        if text.startswith("Last"):
-            page.rotate(90)
         page[NameObject("/Resources")] = DictionaryObject({
             NameObject("/Font"): DictionaryObject({NameObject("/F1"): DictionaryObject({
                 NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
                 NameObject("/BaseFont"): NameObject("/Helvetica")})})})
         stream = DecodedStreamObject()
-        stream.set_data(f"BT /F1 12 Tf 40 720 Td ({text}) Tj ET".encode())
+        placement = "0 1 -1 0 300 300 Tm" if text.startswith("Last") else "40 720 Td"
+        stream.set_data(f"BT /F1 12 Tf {placement} ({text}) Tj ET".encode())
         page[NameObject("/Contents")] = stream
     writer.write(path)
     day = datetime(2026, 11, 4, tzinfo=timezone.utc)
