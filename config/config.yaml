@@ -247,7 +247,7 @@ concurrency:
 pdf:
   download_enabled: true
   storage_dir: "storage/pdfs"
-  transport: "auto"  # Large public PDFs use URLs to avoid upload limits.
+  transport: "base64"  # Optional URL input is limited to PDFs up to 5 MiB.
   require_pdf: false  # True makes missing or failed PDFs an error, with no abstract fallback.
 
 hjfy:

@@ -49,7 +49,7 @@ async def generate_deep_research(
 ) -> str:
     """Analyze a PDF, or explicitly label an allowed abstract-only fallback.
 
-    Large public PDFs are passed by URL to avoid request-body upload limits.
+    URL input is optional and bounded by the provider download size limit.
     require_pdf disables abstract fallback for runs that need full documents.
     """
     system_prompt = load_prompt("deep_research.txt")
@@ -82,12 +82,14 @@ async def generate_deep_research(
             raise ValueError(f"Invalid PDF header: {paper.arxiv_id}")
     file_size = pdf_path.stat().st_size
     engine = "native" if file_size <= _MAX_NATIVE_PDF_BYTES else "cloudflare-ai"
-    # URL transport avoids base64 expansion and repeated uploads of public
-    # arXiv files. Small files retain the existing local-byte default.
-    transport = pdf_config.get("transport", "auto")
-    if transport not in {"auto", "url", "base64"}:
-        raise ValueError("pdf.transport must be auto, url, or base64")
-    use_url = transport == "url" or (transport == "auto" and engine != "native")
+    # OpenRouter URL downloads reject files larger than 5 MiB. Inline bytes
+    # retain the local document and avoid that separate download limit.
+    transport = pdf_config.get("transport", "base64")
+    if transport not in {"url", "base64"}:
+        raise ValueError("pdf.transport must be url or base64")
+    use_url = transport == "url"
+    if use_url and file_size > 5 * 1024 * 1024:
+        raise ValueError("PDF URL download exceeds the provider 5 MiB limit; use base64")
     file_data = paper.pdf_url if use_url else _read_pdf_base64(paper, pdf_dir)[0]
 
     user_content: list[dict] = [

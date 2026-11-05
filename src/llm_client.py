@@ -216,6 +216,7 @@ async def call_llm(
     max_tokens: int | None = None,
     api_key: str = "",
     plugins: list[dict] | None = None,
+    stream: bool = False,
 ) -> str:
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -233,7 +234,7 @@ async def call_llm(
     if plugins is not None:
         payload["plugins"] = plugins
 
-    stream = _has_file_content(messages)
+    stream = stream or _has_file_content(messages)
     if stream:
         payload["stream"] = True
         payload["stream_options"] = {"include_usage": True}

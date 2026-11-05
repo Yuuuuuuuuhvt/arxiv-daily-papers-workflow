@@ -80,7 +80,7 @@ def test_pdf_transport_and_strict_source_handling(monkeypatch, tmp_path):
     day = datetime(2026, 11, 4, tzinfo=timezone.utc)
     paper = ArxivPaper("sample", 1, "Synthetic paper", "Abstract", [], ["cs.RO"], "cs.RO",
                        day, day, "https://arxiv.org/pdf/sample", "https://arxiv.org/abs/sample")
-    config = {"download_enabled": True, "require_pdf": True, "storage_dir": str(tmp_path)}
+    config = {"download_enabled": True, "require_pdf": True, "storage_dir": str(tmp_path), "transport": "url"}
     model = {"model_id": "test"}
     async def inspect(**kwargs):
         assert kwargs["plugins"] == [{"id": "file-parser", "pdf": {"engine": "cloudflare-ai"}}]
