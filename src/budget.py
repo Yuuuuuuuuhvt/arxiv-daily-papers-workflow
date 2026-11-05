@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 _MILLION = Decimal(1_000_000)
 # Round every money amount up to 1e-8 USD so rounding can only over-count.
 _QUANTUM = Decimal("0.00000001")
+# annotate() accepts only these ledger fields, each capped in length.
+_ANNOTATION_KEYS = frozenset(
+    {"http_status", "prompt_tokens", "completion_tokens", "response_id", "finish_reason"}
+)
+_MAX_ANNOTATION_CHARS = 128
 
 
 class BudgetExceeded(RuntimeError):
@@ -218,6 +223,30 @@ class RunBudget:
             self._stop("ledger write failed")
         self._wake()
         if self.stopped:
+            raise BudgetExceeded(self.stop_reason)
+
+    def annotate(self, rid: int, **meta: Any) -> None:
+        """Save bounded metadata, such as an early response_id, for an open
+        request. Reserved, spent and uncertain amounts are not touched, so a
+        later settle or mark_uncertain keeps working on the same reservation.
+
+        Only whitelisted keys with short strings or integers are stored; the
+        ledger must never receive payloads, error bodies or reasoning text.
+        Raises BudgetExceeded when the ledger cannot be written, which also
+        refuses every later reserve()."""
+        if rid not in self._open:
+            return
+        unknown = set(meta) - _ANNOTATION_KEYS
+        if unknown:
+            raise ValueError(f"unsupported annotation keys: {sorted(unknown)}")
+        for key, value in meta.items():
+            if isinstance(value, str):
+                value = value[:_MAX_ANNOTATION_CHARS]
+            elif isinstance(value, bool) or not isinstance(value, int):
+                value = None
+            self._requests[rid][key] = value
+        if not self._persist():
+            self._stop("ledger write failed")
             raise BudgetExceeded(self.stop_reason)
 
     def mark_uncertain(self, rid: int, **meta: Any) -> None:

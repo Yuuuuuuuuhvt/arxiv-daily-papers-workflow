@@ -74,3 +74,31 @@ def test_budget_stop_preserves_completed_work_and_escapes_fallbacks(monkeypatch,
     ):
         with pytest.raises(BudgetExceeded):
             asyncio.run(operation())
+
+
+def test_pdf_transport_and_strict_source_handling(monkeypatch, tmp_path):
+    day = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    paper = ArxivPaper("sample", 1, "Synthetic paper", "Abstract", [], ["cs.RO"], "cs.RO",
+                       day, day, "https://arxiv.org/pdf/sample", "https://arxiv.org/abs/sample")
+    config = {"download_enabled": True, "require_pdf": True, "storage_dir": str(tmp_path)}
+    model = {"model_id": "test"}
+    async def inspect(**kwargs):
+        assert kwargs["plugins"] == [{"id": "file-parser", "pdf": {"engine": "cloudflare-ai"}}]
+        assert kwargs["messages"][1]["content"][1]["file"]["file_data"] == paper.pdf_url
+        return "Full document output"
+    monkeypatch.setattr(deep_research, "call_llm", inspect)
+    with pytest.raises(FileNotFoundError):
+        asyncio.run(deep_research.generate_deep_research(paper, model, "test", config))
+    (tmp_path / "sample.pdf").write_bytes(b"%PDF-synthetic")
+    monkeypatch.setattr(deep_research, "_MAX_NATIVE_PDF_BYTES", 5)
+    result = asyncio.run(deep_research.generate_deep_research(paper, model, "test", config))
+    assert "PDF 全文解析" in result
+    async def failing(**kwargs):
+        if "plugins" in kwargs:
+            raise RuntimeError("PDF unavailable")
+        return "Abstract output"
+    monkeypatch.setattr(deep_research, "call_llm", failing)
+    with pytest.raises(RuntimeError, match="PDF unavailable"):
+        asyncio.run(deep_research.generate_deep_research(paper, model, "test", config))
+    result = asyncio.run(deep_research.generate_deep_research(paper, model, "test", {**config, "require_pdf": False}))
+    assert "仅论文摘要" in result and "Abstract output" in result

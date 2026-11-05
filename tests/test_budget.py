@@ -230,3 +230,118 @@ def test_client_payload_price_caps_and_retry_accounting(tmp_path, monkeypatch):
     assert len(requests) == 1
     assert snap["requests"][0]["finish_reason"] == "length"
     assert snap["spent_usd"] == pytest.approx(0.0001)
+
+
+def test_streaming_file_call_ledger_protection(tmp_path, monkeypatch):
+    def sse(*events: dict | str) -> bytes:
+        lines = [": OPENROUTER PROCESSING\n"]
+        for event in events:
+            lines.append(f"data: {event if isinstance(event, str) else json.dumps(event)}\n\n")
+        return "".join(lines).encode()
+
+    def delta(text, finish=None, gen="gen-s"):
+        return {"id": gen, "choices": [{"delta": {"content": text}, "finish_reason": finish}]}
+
+    usage = {"id": "gen-s", "choices": [], "usage": {"cost": 0.0004, "prompt_tokens": 7,
+                                                      "completion_tokens": 3}}
+
+    class BrokenAfterFirstChunk(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield sse(delta("par"))
+            raise httpx.ReadError("connection reset")
+
+    bodies = {
+        "ok": sse(delta("hel"), delta("lo", "stop"), usage, "[DONE]"),
+        "error_event": sse(delta("x"), {"error": {"message": "secret upstream text"}},
+                           usage, "[DONE]"),
+        "no_usage": sse(delta("x", "stop"), "[DONE]"),
+        "no_done": sse(delta("x", "stop"), usage),
+    }
+    mode = {"kind": "ok"}
+    requests: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        if mode["kind"] == "broken":
+            return httpx.Response(200, stream=BrokenAfterFirstChunk())
+        return httpx.Response(200, content=bodies[mode["kind"]])
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(llm_client.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(llm_client, "BACKOFF_SECONDS", [0, 0, 0])
+    messages = [{"role": "user", "content": [
+        {"type": "text", "text": "secret prompt"},
+        {"type": "file", "file": {"filename": "p.pdf", "file_data": "data:;base64,AAAA"}}]}]
+    plugins = [{"id": "file-parser", "pdf": {"engine": "native"}}]
+
+    async def run(kind, name):
+        mode["kind"] = kind
+        requests.clear()
+        budget = make_budget(tmp_path, "1", name)
+        token = current_budget.set(budget)
+        try:
+            try:
+                out = await llm_client.call_llm(MODEL, messages, plugins=plugins)
+            except Exception as exc:
+                out = exc
+        finally:
+            current_budget.reset(token)
+        return out, budget.snapshot()
+
+    async def annotate_contract():
+        budget = make_budget(tmp_path, "1", "annotate.json")
+        rid = await budget.reserve(MODEL, 100)
+        before = budget.snapshot()
+        budget.annotate(rid, response_id="g" * 500, finish_reason={"payload": "x"})
+        after = budget.snapshot()
+        assert after["reserved_usd"] == before["reserved_usd"]
+        assert len(after["requests"][0]["response_id"]) == 128
+        assert after["requests"][0]["finish_reason"] is None
+        with pytest.raises(ValueError):
+            budget.annotate(rid, messages="secret")
+        # A failed ledger write must close every later request.
+        monkeypatch.setattr(os, "replace", lambda *_a, **_k: (_ for _ in ()).throw(OSError("full")))
+        with pytest.raises(BudgetExceeded):
+            budget.annotate(rid, response_id="gen-x")
+        monkeypatch.undo()
+        monkeypatch.setattr(llm_client.httpx, "AsyncClient",
+                            lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+        with pytest.raises(BudgetExceeded):
+            await budget.reserve(MODEL, 100)
+
+    # Normal stream: chunks are joined and the final usage.cost is settled.
+    out, snap = asyncio.run(run("ok", "ok.json"))
+    assert out == "hello"
+    body = requests[0]
+    assert body["stream"] is True and body["stream_options"] == {"include_usage": True}
+    assert body["max_tokens"] == 100 and body["provider"]["max_price"]["request"] == 0
+    assert snap["spent_usd"] == pytest.approx(0.0004) and snap["reserved_usd"] == 0
+    assert snap["requests"][0]["response_id"] == "gen-s"
+    assert snap["requests"][0]["finish_reason"] == "stop"
+
+    # The id is recorded before the connection breaks; each retry reserves again
+    # and stays uncertain, and the error text counts the real attempts.
+    out, snap = asyncio.run(run("broken", "broken.json"))
+    assert isinstance(out, RuntimeError) and "3 attempt(s)" in str(out)
+    assert len(requests) == 3 and snap["spent_usd"] == 0
+    assert [r["status"] for r in snap["requests"]] == ["uncertain"] * 3
+    assert {r["response_id"] for r in snap["requests"]} == {"gen-s"}
+    assert snap["uncertain_usd"] == pytest.approx(3 * 0.0012)
+
+    # Error event, missing usage and missing [DONE] fail on the first attempt.
+    # Only a [DONE]-terminated stream with a valid cost is settled.
+    out, snap = asyncio.run(run("error_event", "event.json"))
+    assert isinstance(out, RuntimeError) and "1 attempt(s)" in str(out)
+    assert len(requests) == 1 and snap["spent_usd"] == pytest.approx(0.0004)
+    out, snap = asyncio.run(run("no_usage", "nousage.json"))
+    assert isinstance(out, RuntimeError) and len(requests) == 1
+    assert snap["requests"][0]["status"] == "uncertain"
+    out, snap = asyncio.run(run("no_done", "nodone.json"))
+    assert isinstance(out, RuntimeError) and len(requests) == 1
+    assert snap["requests"][0]["status"] == "uncertain" and snap["spent_usd"] == 0
+    for name in ("broken", "event", "nousage", "nodone"):
+        text = (tmp_path / f"{name}.json").read_text()
+        assert "secret" not in text
+
+    asyncio.run(annotate_contract())

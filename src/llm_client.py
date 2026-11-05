@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 import httpx
@@ -88,6 +89,126 @@ def _account_response(budget: RunBudget, rid: int, resp: httpx.Response) -> str 
     return meta["finish_reason"]
 
 
+class StreamFailure(RuntimeError):
+    """The SSE stream ended in a state that cannot be trusted as a full answer.
+
+    It is deliberately not a transport error, so it is never retried."""
+
+
+def _has_file_content(messages: list[dict]) -> bool:
+    return any(
+        part.get("type") == "file"
+        for message in messages
+        if isinstance(message.get("content"), list)
+        for part in message["content"]
+    )
+
+
+def _raise_for_status(resp: httpx.Response) -> None:
+    if resp.status_code == 429 or resp.status_code >= 500:
+        # The body is deliberately not logged or embedded here.
+        raise httpx.HTTPStatusError(
+            f"status {resp.status_code}", request=resp.request, response=resp
+        )
+    resp.raise_for_status()
+
+
+async def _stream_completion(
+    client: httpx.AsyncClient,
+    budget: RunBudget | None,
+    rid: int | None,
+    headers: dict,
+    payload: dict,
+) -> str:
+    """Read one SSE chat completion and return its aggregated content.
+
+    Streaming exists because a long non-streaming PDF request can die with a
+    ReadError before any response arrives, which loses the generation id and
+    leaves the full worst-case reservation frozen. Here the id reaches the
+    ledger with the first chunk, so a broken stream can still be audited.
+
+    The reservation is settled only after the [DONE] event, because usage.cost
+    arrives in the last chunks and an earlier value could undercount. Any
+    exception before that point leaves the reservation to the caller's
+    mark_uncertain. A stream that ends badly but whose [DONE] arrived with a
+    valid usage.cost is still settled, then raises."""
+    async with client.stream("POST", OPENROUTER_BASE, headers=headers, json=payload) as resp:
+        if resp.status_code != 200:
+            await resp.aread()
+            if rid is not None:
+                _account_response(budget, rid, resp)
+            _raise_for_status(resp)
+            raise StreamFailure(f"unexpected status {resp.status_code}")
+
+        parts: list[str] = []
+        usage: dict = {}
+        generation_id: str | None = None
+        finish_reason: str | None = None
+        done = error_event = malformed = False
+        async for line in resp.aiter_lines():
+            if not line.startswith("data:"):
+                continue  # blank separators and ": keep-alive" comments
+            data = line[5:].strip()
+            if data == "[DONE]":
+                done = True
+                break
+            try:
+                chunk = json.loads(data)
+            except ValueError:
+                chunk = None
+            if not isinstance(chunk, dict):
+                malformed = True
+                continue
+            if "error" in chunk:
+                error_event = True  # keep reading: usage may still follow
+            chunk_id = chunk.get("id")
+            if generation_id is None and isinstance(chunk_id, str):
+                generation_id = chunk_id
+                if rid is not None:
+                    budget.annotate(rid, response_id=generation_id)
+            if isinstance(chunk.get("usage"), dict):
+                usage = chunk["usage"]
+            choices = chunk.get("choices")
+            choice = choices[0] if isinstance(choices, list) and choices else None
+            if isinstance(choice, dict):
+                delta = choice.get("delta")
+                if isinstance(delta, dict) and isinstance(delta.get("content"), str):
+                    parts.append(delta["content"])
+                if isinstance(choice.get("finish_reason"), str):
+                    finish_reason = choice["finish_reason"]
+
+    if rid is not None:
+        meta = {
+            "http_status": 200,
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "response_id": generation_id,
+            "finish_reason": finish_reason,
+        }
+        cost = parse_cost(usage.get("cost")) if done else None
+        if cost is None:
+            budget.mark_uncertain(rid, **meta)
+        else:
+            budget.settle(rid, cost, **meta)
+
+    if not done:
+        raise StreamFailure("stream ended without [DONE]")
+    if error_event:
+        raise StreamFailure("stream carried an error event")
+    if malformed:
+        raise StreamFailure("stream carried an unparsable event")
+    if not usage:
+        raise StreamFailure("stream carried no final usage")
+    if finish_reason is None or finish_reason == "error":
+        raise StreamFailure(f"stream finish_reason is {finish_reason}")
+    if finish_reason == "length":
+        raise ValueError("Response truncated (finish_reason=length)")
+    content = "".join(parts)
+    if not content:
+        raise ValueError("Empty content in response")
+    return content
+
+
 async def call_llm(
     model: str,
     messages: list[dict],
@@ -112,6 +233,11 @@ async def call_llm(
     if plugins is not None:
         payload["plugins"] = plugins
 
+    stream = _has_file_content(messages)
+    if stream:
+        payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}
+
     budget = current_budget.get()
     if budget is not None:
         payload["max_tokens"] = _validate_budgeted_request(
@@ -128,7 +254,9 @@ async def call_llm(
         }
 
     last_exc: Exception | None = None
+    attempts = 0
     for attempt in range(MAX_RETRIES):
+        attempts = attempt + 1
         # Every attempt, retries included, needs its own reservation. The
         # reservation sits outside the try so BudgetExceeded is never retried.
         rid = (
@@ -138,20 +266,15 @@ async def call_llm(
         )
         try:
             async with httpx.AsyncClient(timeout=480) as client:
+                if stream:
+                    return await _stream_completion(client, budget, rid, headers, payload)
                 resp = await client.post(
                     OPENROUTER_BASE, headers=headers, json=payload
                 )
                 finish_reason = None
                 if rid is not None:
                     finish_reason = _account_response(budget, rid, resp)
-                if resp.status_code == 429 or resp.status_code >= 500:
-                    # The body is deliberately not logged or embedded here.
-                    raise httpx.HTTPStatusError(
-                        f"status {resp.status_code}",
-                        request=resp.request,
-                        response=resp,
-                    )
-                resp.raise_for_status()
+                _raise_for_status(resp)
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
                 if content is None:
@@ -165,7 +288,9 @@ async def call_llm(
             raise
         except Exception as exc:
             last_exc = exc
-            retryable = isinstance(exc, (httpx.HTTPStatusError, httpx.TimeoutException, httpx.ConnectError))
+            # TransportError covers ReadError, which the old tuple missed.
+            # StreamFailure and ValueError are deliberately not retryable.
+            retryable = isinstance(exc, (httpx.HTTPStatusError, httpx.TransportError))
             if (
                 budget is not None
                 and isinstance(exc, httpx.HTTPStatusError)
@@ -183,11 +308,12 @@ async def call_llm(
                     type(exc).__name__, exc,
                 )
                 await asyncio.sleep(wait)
-            elif attempt < MAX_RETRIES - 1 and not retryable:
-                logger.error("LLM call non-retryable error: %s: %s", type(exc).__name__, exc)
-                break
             else:
-                logger.error("LLM call failed after %d attempts: %s: %s", MAX_RETRIES, type(exc).__name__, exc)
+                logger.error(
+                    "LLM call failed after %d attempt(s), not retrying: %s: %s",
+                    attempts, type(exc).__name__, exc,
+                )
+                break
         finally:
             # Transport errors, timeouts and cancellation reach here with the
             # reservation still open; keep it all as uncertain spend. This is a
@@ -200,4 +326,4 @@ async def call_llm(
                     # raises; do not mask the exception already in flight.
                     pass
 
-    raise RuntimeError(f"LLM call failed after {MAX_RETRIES} retries") from last_exc
+    raise RuntimeError(f"LLM call failed after {attempts} attempt(s)") from last_exc

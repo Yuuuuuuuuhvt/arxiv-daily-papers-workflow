@@ -4,14 +4,14 @@ import base64
 import logging
 from pathlib import Path
 
-from .config import load_prompt, DATA_DIR, ROOT_DIR
+from .config import load_prompt, ROOT_DIR
 from .budget import BudgetExceeded
 from .llm_client import call_llm
 from .models import ArxivPaper
 
 logger = logging.getLogger(__name__)
 
-# PDFs larger than this (in bytes) use pdf-text instead of native to avoid
+# PDFs larger than this use the free text parser instead of native to avoid
 # Gemini processing timeouts on very large documents.
 _MAX_NATIVE_PDF_BYTES = 15 * 1024 * 1024  # 15 MB
 
@@ -47,13 +47,10 @@ async def generate_deep_research(
     api_key: str,
     pdf_config: dict | None = None,
 ) -> str:
-    """Generate a rich 3-module scholarly analysis for a single paper.
+    """Analyze a PDF, or explicitly label an allowed abstract-only fallback.
 
-    PDF handling strategy (3-tier fallback):
-      1. If local PDF exists and <= 15 MB → base64 + native engine (Gemini sees
-         figures, formulas, tables).
-      2. If local PDF > 15 MB → base64 + pdf-text engine (avoid Gemini timeout).
-      3. If PDF unavailable or all PDF attempts fail → text-only (abstract).
+    Large public PDFs are passed by URL to avoid request-body upload limits.
+    require_pdf disables abstract fallback for runs that need full documents.
     """
     system_prompt = load_prompt("deep_research.txt")
     paper_content = _build_paper_content(paper)
@@ -62,8 +59,11 @@ async def generate_deep_research(
         f"{paper_content}"
     )
 
+    require_pdf = bool(pdf_config and pdf_config.get("require_pdf", False))
     use_pdf = pdf_config and pdf_config.get("download_enabled", False)
     if not use_pdf:
+        if require_pdf:
+            raise ValueError("require_pdf needs PDF downloads enabled")
         return await _call_text_only(model_config, api_key, system_prompt, text_part, paper)
 
     # Resolve local PDF directory
@@ -71,28 +71,34 @@ async def generate_deep_research(
     if not pdf_dir.is_absolute():
         pdf_dir = ROOT_DIR / pdf_config.get("storage_dir", "storage/pdfs")
 
-    b64_url, file_size = _read_pdf_base64(paper, pdf_dir)
-    if not b64_url:
-        logger.info("DeepResearch: no local PDF for %s, text-only", paper.arxiv_id)
+    pdf_path = pdf_dir / f"{paper.arxiv_id}.pdf"
+    if not pdf_path.is_file():
+        if require_pdf:
+            raise FileNotFoundError(f"Required PDF missing: {paper.arxiv_id}")
+        logger.info("DeepResearch: no local PDF for %s, abstract-only", paper.arxiv_id)
         return await _call_text_only(model_config, api_key, system_prompt, text_part, paper)
-
-    # Choose engine based on file size
-    if file_size <= _MAX_NATIVE_PDF_BYTES:
-        engine = "native"
-    else:
-        engine = "pdf-text"
-        logger.info("DeepResearch: PDF too large (%.1f MB) for native, using pdf-text for %s",
-                     file_size / 1e6, paper.arxiv_id)
+    with pdf_path.open("rb") as source:
+        if source.read(5) != b"%PDF-":
+            raise ValueError(f"Invalid PDF header: {paper.arxiv_id}")
+    file_size = pdf_path.stat().st_size
+    engine = "native" if file_size <= _MAX_NATIVE_PDF_BYTES else "cloudflare-ai"
+    # URL transport avoids base64 expansion and repeated uploads of public
+    # arXiv files. Small files retain the existing local-byte default.
+    transport = pdf_config.get("transport", "auto")
+    if transport not in {"auto", "url", "base64"}:
+        raise ValueError("pdf.transport must be auto, url, or base64")
+    use_url = transport == "url" or (transport == "auto" and engine != "native")
+    file_data = paper.pdf_url if use_url else _read_pdf_base64(paper, pdf_dir)[0]
 
     user_content: list[dict] = [
         {"type": "text", "text": text_part},
         {"type": "file", "file": {
             "filename": f"{paper.arxiv_id}.pdf",
-            "file_data": b64_url,
+            "file_data": file_data,
         }},
     ]
     plugins = [{"id": "file-parser", "pdf": {"engine": engine}}]
-    logger.info("DeepResearch with PDF for %s (engine=%s, %.1f MB, base64)",
+    logger.info("DeepResearch with PDF for %s (engine=%s, %.1f MB)",
                 paper.arxiv_id, engine, file_size / 1e6)
 
     try:
@@ -106,10 +112,13 @@ async def generate_deep_research(
             api_key=api_key,
             plugins=plugins,
         )
-        return report.strip()
+        source_note = "PDF 原文，包含图表输入" if engine == "native" else "PDF 全文解析，图像细节可能缺失"
+        return f"> 输入依据：{source_note}。\n\n{report.strip()}"
     except BudgetExceeded:
         raise
     except Exception as exc:
+        if require_pdf:
+            raise
         logger.warning("DeepResearch with PDF failed for %s: %s. Falling back to text-only",
                        paper.arxiv_id, exc)
         return await _call_text_only(model_config, api_key, system_prompt, text_part, paper)
@@ -129,7 +138,7 @@ async def _call_text_only(
             temperature=model_config.get("temperature", 0.2),
             api_key=api_key,
         )
-        return report.strip()
+        return f"> 输入依据：仅论文摘要，尚未完成 PDF 全文解读。\n\n{report.strip()}"
     except BudgetExceeded:
         raise
     except Exception:
