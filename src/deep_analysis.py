@@ -4,6 +4,7 @@ import json
 import logging
 
 from .config import load_affiliations, load_config, load_prompt
+from .budget import BudgetExceeded
 from .llm_client import call_llm
 from .models import AnalysisResult, ArxivPaper
 
@@ -122,6 +123,8 @@ async def analyze_paper(
         )
         data = _parse_analysis(raw)
         analysis = _dict_to_analysis(data)
+    except BudgetExceeded:
+        raise
     except Exception:
         logger.exception("Deep analysis failed for %s, using defaults", paper.arxiv_id)
         analysis = AnalysisResult(

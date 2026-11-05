@@ -5,6 +5,7 @@ import json
 import logging
 
 from .config import load_prompt
+from .budget import BudgetExceeded
 from .llm_client import call_llm
 from .models import ArxivPaper, RelevanceResult
 
@@ -149,6 +150,8 @@ async def filter_relevance(
                 api_key=api_key,
             )
             return _parse_response(raw, expected_ids)
+        except BudgetExceeded:
+            raise
         except Exception:
             logger.exception("Relevance filter LLM call failed, defaulting batch to peripheral")
             return [

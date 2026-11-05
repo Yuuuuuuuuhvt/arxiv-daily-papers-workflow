@@ -76,6 +76,7 @@ Full runs follow the PDF settings in YAML and enable DeepResearch unless disable
 | `PAPERS_CONFIG` | YAML file; defaults to the checkout's `config/config.yaml` |
 | `PAPERS_DATA_DIR` | Report and index directory; defaults to the checkout's `data` directory |
 | `PAPERS_QUICK_START` | Set to `1` to use the isolated trial mode from a service environment file |
+| `PAPERS_BUDGET_USD` | Optional per-run model budget in USD; requires matching model price policies under `budget.models` |
 | `MAX_PAPERS` | Maximum new candidates per run; `0` means no limit |
 | `REPORT_DATE` | Optional UTC first-submission date in `YYYY-MM-DD` format |
 | `SKIP_DEEP_RESEARCH` | Set to `1` to skip extended PDF-based analysis |
@@ -86,6 +87,10 @@ Full runs follow the PDF settings in YAML and enable DeepResearch unless disable
 Relative `PAPERS_CONFIG` and `PAPERS_DATA_DIR` paths resolve from the process working directory. Use absolute paths for a scheduled service. PDF downloads use the separate `pdf.storage_dir` YAML setting, which resolves relative paths from the code checkout; use an absolute path to place PDFs on another disk.
 
 Real collection prepares the output directories and checks that they can be written before making network requests. The read-only `--check` command intentionally does not create these directories.
+
+For a budgeted full run, disable trial mode and set `PAPERS_BUDGET_USD`, for example `30`. The program checks current model context limits and pricing, restricts provider prices and output length, and reserves the maximum possible cost before each request, including retries. The reservation covers the full advertised input context, so the run can stop conservatively before spending the entire budget. Unknown request costs keep their full reservation. This is a local run budget, not an OpenRouter account or key limit.
+
+Budget records live in `run-metadata/YYYY-MM-DD.budget.json`. An existing ledger is never silently reset. Use a new data directory for a separately authorized run. Checkpoints retain classifications, completed analyses and deep research. A budget stop writes a partial report with status `budget_exhausted`, suppresses email and publishing, leaves the deduplication index unchanged, and exits with status 3. Resuming paid work from checkpoints is not yet automated.
 
 Email is optional. Configure all of `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, and `MAIL_TO` to use SMTP with STARTTLS. Missing settings skip email. The username, sender, and recipient may differ. An `email_sent` result means SMTP accepted the message, not that it reached the inbox.
 

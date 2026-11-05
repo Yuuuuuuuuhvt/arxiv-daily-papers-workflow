@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from .config import load_prompt, DATA_DIR, ROOT_DIR
+from .budget import BudgetExceeded
 from .llm_client import call_llm
 from .models import ArxivPaper
 
@@ -106,6 +107,8 @@ async def generate_deep_research(
             plugins=plugins,
         )
         return report.strip()
+    except BudgetExceeded:
+        raise
     except Exception as exc:
         logger.warning("DeepResearch with PDF failed for %s: %s. Falling back to text-only",
                        paper.arxiv_id, exc)
@@ -127,6 +130,8 @@ async def _call_text_only(
             api_key=api_key,
         )
         return report.strip()
+    except BudgetExceeded:
+        raise
     except Exception:
         logger.exception("DeepResearch text-only also failed for %s", paper.arxiv_id)
         return ""

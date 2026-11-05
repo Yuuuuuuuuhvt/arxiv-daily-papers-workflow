@@ -227,6 +227,19 @@ scoring:
 email:
   max_highlights_in_email: 3
 
+budget:
+  max_output_tokens: 16384
+  models:
+    google/gemini-2.5-flash:
+      prompt_price_per_million: 0.3
+      completion_price_per_million: 2.5
+    google/gemini-3.1-pro-preview:
+      prompt_price_per_million: 4
+      completion_price_per_million: 18
+    google/gemini-4-argon:
+      prompt_price_per_million: 2
+      completion_price_per_million: 10
+
 concurrency:
   max_concurrent_llm: 10
   max_concurrent_pdf: 5

@@ -90,6 +90,7 @@ def generate_daily_report(
 
     ctx = {
         "date": date_str,
+        "run_status": config.get("run_status", "completed"),
         "core_count": len(core_views),
         "peripheral_count": len(peripheral_views),
         "paper_count": len(core_views) + len(peripheral_views),
