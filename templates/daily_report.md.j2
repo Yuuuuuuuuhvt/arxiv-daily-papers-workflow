@@ -6,8 +6,8 @@
 
 | Metric | Value |
 |--------|-------|
-| Core papers (foundation model focus) | {{ core_count }} |
-| Peripheral papers (traditional methods) | {{ peripheral_count }} |
+| Core papers | {{ core_count }} |
+| Peripheral papers | {{ peripheral_count }} |
 {% for dir, count in direction_counts.items() %}| {{ dir }} | {{ count }} |
 {% endfor %}| Top score | {{ top_score }} ({{ top_paper_title }}) |
 
@@ -78,7 +78,7 @@
 {% if peripheral_papers %}
 ## Peripheral Papers (边缘相关)
 
-> 以下论文属于相关领域但使用传统方法，未涉及基础模型（VLA/VLM/World Model）。
+> 以下论文与研究方向存在间接联系或提供背景材料。传统方法与学习方法均按论文的实际贡献判断相关性。
 
 {% for paper in peripheral_papers %}
 

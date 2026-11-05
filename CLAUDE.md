@@ -40,7 +40,7 @@ On PowerShell, set runtime flags with `$env:NAME = 'value'`, then run `python -m
 
 ## Architecture
 
-This repository is an arXiv paper discovery pipeline for Embodied AI, World Models, and Autonomous Driving. It runs independently of CI. `deploy/systemd/` provides a Linux user service and a weekday timer at UTC 05:30; `docs/self-hosting.md` describes installation. `.github/workflows/quick-start.yml` provides an optional trial. The older publishing workflows depend on maintainer infrastructure.
+This repository is an arXiv paper discovery pipeline for Embodied AI and VLA, World Models, Autonomous Driving, Agentic AI, and Robotics. Each direction is independently relevant. It runs independently of CI. `deploy/systemd/` provides a Linux user service and a weekday timer at UTC 05:30; `docs/self-hosting.md` describes installation. `.github/workflows/quick-start.yml` provides an optional trial. The older publishing workflows depend on maintainer infrastructure.
 
 The pipeline is sequentially orchestrated by `src/main.py::run_pipeline()`:
 

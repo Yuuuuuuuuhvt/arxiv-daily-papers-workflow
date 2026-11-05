@@ -12,9 +12,11 @@ from .models import AnalysisResult, ArxivPaper
 logger = logging.getLogger(__name__)
 
 DIRECTION_DISPLAY = {
-    "embodied_ai": "Embodied AI",
+    "embodied_ai": "Embodied AI / VLA",
     "world_models": "World Models",
     "autonomous_driving": "Autonomous Driving",
+    "agentic": "Agentic AI",
+    "robotics": "Robotics",
     "multiple": "Multiple",
 }
 

@@ -29,7 +29,7 @@ class ArxivPaper:
 class RelevanceResult:
     arxiv_id: str
     verdict: str  # "core" | "peripheral" | "not_relevant"
-    direction: str  # "embodied_ai" | "world_models" | "autonomous_driving" | "multiple" | "none"
+    direction: str  # Direction ID from the relevance prompt; none means unrelated.
     confidence: float
     reason: str = ""
     error: Optional[str] = None

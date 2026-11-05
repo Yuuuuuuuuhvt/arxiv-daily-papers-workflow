@@ -1,0 +1,53 @@
+{
+  "description": "Synthetic examples for scope validation, not real papers or measured research results.",
+  "papers": [
+    {
+      "id": "example-agentic",
+      "title": "Recoverable memory for browser-based software agents",
+      "abstract": "We study language-model agents completing long sequences of browser and terminal actions. A persistent memory and recovery policy helps resume interrupted tasks. Evaluation measures task completion and tool-call errors on software workflows. The system has no physical robot and uses no world model or VLA architecture.",
+      "categories": ["cs.AI", "cs.SE"],
+      "expected_verdict": "core",
+      "expected_direction": "agentic"
+    },
+    {
+      "id": "example-robotics",
+      "title": "Contact-aware predictive control for dexterous robot hands",
+      "abstract": "We introduce a constrained model predictive controller for in-hand manipulation. Experiments on a real robot hand evaluate contact stability and object reorientation under disturbances. The method uses tactile feedback and analytic dynamics. It does not use pretrained models, VLA, language models or neural world models.",
+      "categories": ["cs.RO", "eess.SY"],
+      "expected_verdict": "core",
+      "expected_direction": "robotics"
+    },
+    {
+      "id": "example-vla",
+      "title": "A vision-language-action architecture for instruction-following manipulation",
+      "abstract": "We propose a pretrained vision-language-action model that maps images and language instructions to robot actions. The main contribution is the VLA architecture and its transfer across robot embodiments, evaluated on manipulation tasks.",
+      "categories": ["cs.RO"],
+      "expected_verdict": "core",
+      "expected_direction": "embodied_ai"
+    },
+    {
+      "id": "example-world-model",
+      "title": "Evaluating long-horizon consistency in learned physical world models",
+      "abstract": "We introduce a benchmark for learned action-conditioned world models. The benchmark evaluates temporal consistency and future-state prediction in interactive physical environments. Its contribution is world-model evaluation rather than a new robot control or driving system.",
+      "categories": ["cs.CV", "cs.LG"],
+      "expected_verdict": "core",
+      "expected_direction": "world_models"
+    },
+    {
+      "id": "example-driving",
+      "title": "An end-to-end autonomous driving policy with multi-sensor inputs",
+      "abstract": "We study an end-to-end learned driving policy integrating camera and LiDAR inputs. Closed-loop driving evaluations measure collision rates and route completion. The work contributes to autonomous driving perception and planning, without introducing an agent framework or a learned world simulator.",
+      "categories": ["cs.CV", "cs.RO"],
+      "expected_verdict": "core",
+      "expected_direction": "autonomous_driving"
+    },
+    {
+      "id": "example-unrelated",
+      "title": "A molecular contrast agent for magnetic resonance imaging",
+      "abstract": "We synthesize a chemical contrast agent and measure its magnetic relaxation properties. The paper studies molecular chemistry and has no artificial intelligence agent, robotics, autonomous driving or world-model contribution.",
+      "categories": ["physics.chem-ph"],
+      "expected_verdict": "not_relevant",
+      "expected_direction": "none"
+    }
+  ]
+}

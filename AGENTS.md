@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI / World Models / Autonomous Driving 三个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
+全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI 与 VLA、World Models、Autonomous Driving、Agentic AI 和 Robotics 五个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
 
 - **技术栈**: Python 3.11+, asyncio, httpx, Jinja2, PyYAML, feedparser, arxiv
 - **LLM 网关**: OpenRouter (openrouter.ai) — 所有 LLM 调用经此路由
@@ -28,7 +28,7 @@ Data flow:
 ### Key Design Decisions
 
 1. **Hybrid fetch**: API (keyword search) + RSS (announce type metadata) combined. RSS provides `new`/`replace`/`cross` classification; API provides deep keyword matching.
-2. **3-tier relevance**: `core` (foundation model papers) / `peripheral` (domain-relevant but traditional) / `not_relevant`. Only core papers get DeepResearch.
+2. **3-tier relevance**: `core` means a direct contribution to a tracked direction; `peripheral` means supporting context or an indirect connection; `not_relevant` means outside scope. Agentic and Robotics papers do not need a foundation model to qualify as core. Only core papers get DeepResearch.
 3. **PDF via base64**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files <=15 MB use `native` engine (Gemini sees figures/tables); larger files degrade to `pdf-text`.
 4. **Concurrency**: `asyncio.Semaphore` controls parallel LLM calls (`max_concurrent_llm` for analysis, `max_concurrent_pdf` for DeepResearch).
 5. **Fail-safe**: Every LLM stage has fallback — parse failures default to `peripheral`, analysis failures use defaults, DeepResearch falls back from PDF to text-only.

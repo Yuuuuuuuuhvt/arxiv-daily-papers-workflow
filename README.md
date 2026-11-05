@@ -1,6 +1,8 @@
 # arXiv Daily Papers Workflow
 
-Collect arXiv papers, filter them against research interests, and generate scored Markdown reports with optional PDF analysis and email digests. The supplied profile focuses on embodied AI, world models, and autonomous driving. Analysis prompts currently produce Chinese text.
+Collect arXiv papers, filter them against research interests, and generate scored Markdown reports with optional PDF analysis and email digests. The supplied profile covers embodied AI and VLA, world models, autonomous driving, agentic AI, and robotics. Analysis prompts currently produce Chinese text.
+
+Agentic AI includes software, web, GUI and coding agents, tool use, memory, planning, multi-agent coordination and evaluation. Robotics includes manipulation, locomotion, navigation, SLAM, perception, control, hardware and simulation. Each direction is independently relevant: software agents do not need physical robot experiments, and robotics papers do not need a foundation model to qualify as core research.
 
 The pipeline runs as a normal Python command. You can run it locally, schedule it on a Linux server such as a Jetson AGX, or try it through GitHub Actions. A GitHub account, Git write token, email account, and the maintainer's data repository are not required for local or server use.
 

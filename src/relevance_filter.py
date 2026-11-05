@@ -23,51 +23,39 @@ def _build_papers_block(papers: list[ArxivPaper]) -> str:
     return "\n".join(lines)
 
 
-FEW_SHOT_BLOCK = """## Calibration Examples
+FEW_SHOT_BLOCK = """## Illustrative synthetic calibration examples
 
-CORE -- Embodied AI:
-- "RoboAlign: Learning Test-Time Reasoning for Language-Action Alignment in VLA Models"
-  -> VLA model reasoning -> core, embodied_ai
-- "VP-VLA: Visual Prompting as an Interface for Vision-Language-Action Models"
-  -> VLA architecture -> core, embodied_ai
-- "UniDex: A Robot Foundation Suite for Universal Dexterous Hand Control"
-  -> VLA-based dexterous manipulation -> core, embodied_ai
+CORE:
+- A VLA architecture that improves language-conditioned robot manipulation
+  -> core, embodied_ai
+- A latent world model benchmark evaluating action-conditioned future prediction
+  -> core, world_models
+- An end-to-end autonomous driving model evaluated on closed-loop driving tasks
+  -> core, autonomous_driving
+- A software agent memory system evaluated on long-horizon tool-use tasks
+  -> core, agentic; no physical robot is required
+- Coordinating coding agents through shared plans, with repository task evaluation
+  -> core, agentic; software-only evaluation is sufficient
+- Model predictive control for dexterous manipulation evaluated on real robot hands
+  -> core, robotics; no foundation model is required
+- A SLAM method evaluated for mobile robot navigation
+  -> core, robotics; classical estimation is eligible
+- An open robot hand with tactile sensing and evaluated manipulation capabilities
+  -> core, robotics; hardware can be the main contribution
 
-CORE -- World Models:
-- "Omni-WorldBench: Towards a Comprehensive Evaluation for World Models"
-  -> World model benchmark -> core, world_models
-- "ThinkJEPA: Empowering Latent World Models with Large Vision-Language Reasoning"
-  -> JEPA + VLM for world modeling -> core, world_models
-- "WorldCache: Content-Aware Caching for Accelerated Video World Models"
-  -> Video world model efficiency -> core, world_models
+PERIPHERAL:
+- A generic storage optimization with only a brief discussion of agent memory
+  -> peripheral, agentic; agent behavior is not evaluated
+- A materials study motivated by robot grippers without a robot method or evaluation
+  -> peripheral, robotics; it provides supporting context
 
-CORE -- Autonomous Driving:
-- "DriveDreamer: World Model for Autonomous Driving"
-  -> World model + driving -> core, multiple
-- "CounterScene: Counterfactual Reasoning in Generative World Models for Driving"
-  -> World model for AD safety evaluation -> core, multiple
-
-PERIPHERAL (in domain but no foundation model):
-- "Sim-to-Real of Humanoid Locomotion via Torque Perturbation Injection"
-  -> Humanoid RL but no foundation model -> peripheral, embodied_ai
-- "MEVIUS2: Practical Open-Source Quadruped Robot with Multimodal Perception"
-  -> Robot hardware + RL, no VLA/foundation model -> peripheral, embodied_ai
-- "LRC-WeatherNet: LiDAR, RADAR, Camera Fusion for Weather Classification"
-  -> AD sensor fusion, no foundation model -> peripheral, autonomous_driving
-
-NOT RELEVANT (common false positives):
-- "CAMA: Exploring Collusive Adversarial Attacks in c-MARL"
-  -> Pure MARL theory, no robot application -> not_relevant
-- "Reason-to-Transmit: Adaptive Communication for Cooperative Perception"
-  -> V2X communication protocol, not perception/planning -> not_relevant
-- "High-Speed, All-Terrain Autonomy: Ensuring Safety at Limits of Mobility"
-  -> Off-road vehicle MPC dynamics, no learning -> not_relevant
-- "Understanding Behavior Cloning with Action Quantization"
-  -> Pure statistical theory, no robot experiments -> not_relevant
-- "Adaptive Robust Estimator for Multi-Agent Reinforcement Learning"
-  -> MARL theory, no physical grounding -> not_relevant
-- "Image-Conditioned Adaptive Parameter Tuning for Visual Odometry Frontends"
-  -> Classical VO tuning, no foundation model -> not_relevant"""
+NOT RELEVANT:
+- A contrast agent for medical imaging with no intelligent-agent or robot method
+  -> not_relevant, none
+- Generic stock-price prediction with no action-taking agent contribution
+  -> not_relevant, none
+- A video generator for visual entertainment without a world-model evaluation
+  -> not_relevant, none"""
 
 
 VALID_VERDICTS = {"core", "peripheral", "not_relevant"}

@@ -1,5 +1,5 @@
 arxiv:
-  rss_categories: "cs.CV+cs.RO+cs.AI+cs.LG+cs.MA"
+  rss_categories: "cs.CV+cs.RO+cs.AI+cs.LG+cs.MA+cs.CL+cs.SE+cs.HC+eess.SY"
   api_max_results_per_direction: 50
   api_delay_seconds: 3
   staleness_threshold_hours: 24
@@ -91,6 +91,74 @@ research_directions:
       - "cs.RO"
       - "cs.AI"
 
+  agentic:
+    title_keywords:
+      - "agentic"
+      - "LLM agent"
+      - "language model agent"
+      - "AI agent"
+      - "tool use"
+      - "tool calling"
+      - "computer use agent"
+      - "web agent"
+      - "GUI agent"
+      - "coding agent"
+      - "agent memory"
+      - "context engineering"
+    abstract_keywords:
+      - "agentic workflow"
+      - "autonomous agent"
+      - "tool-augmented language model"
+      - "multi-agent collaboration"
+      - "agent evaluation"
+    abstract_combos:
+      - ["large language model", "planning"]
+      - ["agent", "long-horizon"]
+      - ["agent", "tool"]
+      - ["agent", "memory"]
+      - ["multi-agent", "language model"]
+      - ["agent", "benchmark"]
+    categories:
+      - "cs.AI"
+      - "cs.CL"
+      - "cs.LG"
+      - "cs.MA"
+      - "cs.SE"
+      - "cs.HC"
+
+  robotics:
+    title_keywords:
+      - "robotics"
+      - "robot manipulation"
+      - "robot control"
+      - "motion planning"
+      - "robot navigation"
+      - "SLAM"
+      - "humanoid"
+      - "legged robot"
+      - "dexterous manipulation"
+      - "tactile sensing"
+    abstract_keywords:
+      - "robot learning"
+      - "robot perception"
+      - "robotic manipulation"
+      - "robot locomotion"
+      - "robot hardware"
+      - "sim-to-real"
+    abstract_combos:
+      - ["robot", "model predictive control"]
+      - ["robot", "planning"]
+      - ["robot", "reinforcement learning"]
+      - ["robot", "state estimation"]
+      - ["robot", "tactile"]
+      - ["robot", "benchmark"]
+    categories:
+      - "cs.RO"
+      - "cs.AI"
+      - "cs.CV"
+      - "cs.LG"
+      - "eess.SY"
+
 models:
   relevance_filter:
     provider: "openrouter"
@@ -106,15 +174,21 @@ models:
 
 research_focus:
   description: |
-    Our current research focus is on World Models assisting Embodied AI
-    downstream tasks (manipulation, locomotion, planning). Specifically:
-    - World model-based policy learning / planning for robot control
-    - VLA (Vision-Language-Action) models and architectures
-    - World models for physical understanding and sim-to-real
-    - Diffusion policies / action generation with world model priors
-    Papers about pure navigation, traffic signs, weather classification,
-    or autonomous driving perception without world model / VLA components
-    are NOT aligned with our focus.
+    We follow five complementary research directions: embodied AI and VLA,
+    world models, autonomous driving, agentic AI, and robotics.
+    Each direction is independently relevant; a paper does not need to combine
+    world models and VLA to receive a high focus relevance score.
+    - World models, learned dynamics, simulation, and model-based planning
+    - VLA models, robot foundation models, and learned action generation
+    - Autonomous driving perception, prediction, planning, and evaluation
+    - Software, web, GUI, and coding agents; tool use, memory, context,
+      long-horizon planning, multi-agent coordination, and agent evaluation
+    - Robot manipulation, locomotion, navigation, SLAM, perception, tactile
+      sensing, control, sim-to-real, hardware, and robotics benchmarks
+    Agentic research does not require a physical robot. Robotics contributions
+    can use classical control or smaller learned models; absence of a foundation
+    model is not a reason to lower their relevance. Judge the actual contribution
+    and evidence rather than isolated keywords or the application label.
   high_keywords:
     - "world model"
     - "VLA"
@@ -128,14 +202,17 @@ research_focus:
     - "model-based reinforcement learning"
     - "latent dynamics"
     - "JEPA"
-  low_keywords:
-    - "navigation"
-    - "traffic sign"
-    - "weather classification"
-    - "V2X"
-    - "lane detection"
-    - "object detection"
-    - "pedestrian"
+    - "agentic"
+    - "tool use"
+    - "agent memory"
+    - "multi-agent"
+    - "coding agent"
+    - "robotics"
+    - "robot navigation"
+    - "SLAM"
+    - "robot control"
+    - "tactile sensing"
+  low_keywords: []
 
 scoring:
   weights:
