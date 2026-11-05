@@ -22,7 +22,10 @@ def _extract_pdf_text(pdf_path: Path) -> str:
     from pypdf import PdfReader
 
     reader = PdfReader(pdf_path)
-    pages = [page.extract_text(extraction_mode="layout") or "" for page in reader.pages]
+    # Rotated labels are part of the paper too; layout mode otherwise drops
+    # them by default. Their placement can still be imperfect in plain text.
+    pages = [page.extract_text(extraction_mode="layout", layout_mode_strip_rotated=False) or ""
+             for page in reader.pages]
     if not any(page.strip() for page in pages):
         raise ValueError("PDF has no extractable text; native input or OCR is required")
     return "\n\n".join(f"Page {i}\n{text}" for i, text in enumerate(pages, 1))
@@ -115,8 +118,6 @@ async def generate_deep_research(
     if transport not in {"url", "base64"}:
         raise ValueError("pdf.transport must be url or base64")
     use_url = transport == "url"
-    if use_url and file_size > 5 * 1024 * 1024:
-        raise ValueError("PDF URL download exceeds the provider 5 MiB limit; use base64")
     file_data = paper.pdf_url if use_url else _read_pdf_base64(paper, pdf_dir)[0]
 
     user_content: list[dict] = [

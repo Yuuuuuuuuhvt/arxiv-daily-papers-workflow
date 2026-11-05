@@ -111,6 +111,8 @@ def test_large_pdf_reads_every_page_and_rejects_empty_text(monkeypatch, tmp_path
     writer = PdfWriter()
     for text in ("First page evidence", "Last page evidence"):
         page = writer.add_blank_page(width=612, height=792)
+        if text.startswith("Last"):
+            page.rotate(90)
         page[NameObject("/Resources")] = DictionaryObject({
             NameObject("/Font"): DictionaryObject({NameObject("/F1"): DictionaryObject({
                 NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
