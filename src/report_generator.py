@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -111,6 +113,24 @@ def save_report(content: str, date_str: str, data_dir: Path | None = None) -> Pa
     path = reports_dir / f"{date_str}.md"
     path.write_text(content, encoding="utf-8")
     logger.info("Report saved: %s", path)
+    return path
+
+
+def save_html_report(content: str, date_str: str, data_dir: Path | None = None) -> Path:
+    reports_dir = (data_dir if data_dir is not None else DATA_DIR) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    path = reports_dir / f"{date_str}.html"
+    targets = [path]
+    # Historical backfills must not replace the newest report's stable entry point.
+    newest = max((p.stem for p in reports_dir.glob("????-??-??.html")), default=date_str)
+    if date_str >= newest:
+        targets.append(reports_dir / "latest.html")
+    for target in targets:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=reports_dir, delete=False) as file:
+            file.write(content)
+            temporary = file.name
+        os.replace(temporary, target)
+    logger.info("HTML report saved: %s", path)
     return path
 
 

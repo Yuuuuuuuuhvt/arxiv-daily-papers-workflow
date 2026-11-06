@@ -5,12 +5,12 @@ import json
 import smtplib
 import ssl
 from email import message_from_string
-from types import SimpleNamespace
+from datetime import datetime, timezone
 
 import pytest
 
 from src import email_sender, main
-from src.models import AnalysisResult
+from src.models import AnalysisResult, ArxivPaper
 
 
 MAIL = {
@@ -82,7 +82,9 @@ def test_pipeline_keeps_report_and_records_actual_mail_outcome(monkeypatch, tmp_
     monkeypatch.setattr(main, "setup_logging", lambda: None)
     config = {"models": {"relevance_filter": {}, "deep_analysis": {}}, "scoring": {}}
     monkeypatch.setattr(main, "load_config", lambda: config)
-    paper = SimpleNamespace(arxiv_id="test-paper")
+    day = datetime(2026, 10, 14, tzinfo=timezone.utc)
+    paper = ArxivPaper("test-paper", 1, "Test", "Abstract", [], [], "cs.RO", day, day,
+                       "https://example.test/paper.pdf", "https://example.test/paper")
     monkeypatch.setattr(main, "hybrid_fetch", lambda *args: [paper])
     monkeypatch.setattr(main, "load_index", lambda *args: {})
     monkeypatch.setattr(main, "dedup", lambda papers, index: papers)

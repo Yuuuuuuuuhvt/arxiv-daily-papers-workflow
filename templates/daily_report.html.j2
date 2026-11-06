@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ date }} 论文日报</title>
+<style>
+{% raw %}
+:root{color-scheme:light}
+*{box-sizing:border-box}
+html{scroll-behavior:auto}
+body{margin:0;background:#fafaf7;color:#202b36;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;overflow-wrap:anywhere}
+a{color:#236a9c}
+main{max-width:1280px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:0 0 6px;font-size:22px;line-height:1.25}
+section{margin-top:24px}
+h2{margin:0 0 8px;font-size:18px;line-height:1.25}
+h3{margin:16px 0 6px;font-size:14px;font-weight:650}
+p{margin:0 0 8px}
+.note{color:#526172;font-size:12px}
+.pending{color:#805615;background:#fff7df;padding:6px 10px;border-radius:6px}
+dl{margin:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 16px;margin:12px 0}
+.stats dt{color:#526172;font-size:12px}
+.stats dd{margin:0;font-weight:650;font-variant-numeric:tabular-nums}
+.budget{border-top:.5px solid #d5dbe2;padding-top:8px;margin-top:8px}
+.controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:16px 0 6px}
+.controls .group{display:flex;flex-wrap:wrap;gap:6px;margin-right:10px}
+button,input{font:inherit;color:inherit}
+button{border:1px solid #d5dbe2;border-radius:6px;padding:6px 10px;background:#fff;cursor:pointer}
+button:hover{background:#f1f5f7}
+button[aria-pressed="true"],button[aria-current="true"]{background:#eaf1f5;border-color:#236a9c}
+input[type=search]{border:1px solid #d5dbe2;border-radius:6px;padding:6px 10px;background:#fff;min-width:220px;flex:1 1 220px;max-width:420px}
+:focus-visible{outline:2px solid #236a9c;outline-offset:2px}
+.layout{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:16px;margin-top:8px;align-items:start}
+.index{border:1px solid #d5dbe2;border-radius:8px;background:#fff;max-height:calc(100vh - 24px);overflow:auto;position:sticky;top:12px}
+.index ul{list-style:none;margin:0;padding:0}
+.index li+li{border-top:.5px solid #d5dbe2}
+.index button{display:block;width:100%;text-align:left;border:0;border-radius:0;padding:8px 10px;background:transparent}
+.index button:hover{background:#f1f5f7}
+.index button[aria-current="true"]{background:#eaf1f5;box-shadow:inset 0 0 0 2px #236a9c}
+.item-title{display:block;font-weight:650}
+.item-meta{display:block;color:#526172;font-size:12px}
+.reader{border:1px solid #d5dbe2;border-radius:8px;background:#fff;padding:16px;min-width:0}
+.reader:focus{outline:none}
+.reader:focus-visible{outline:2px solid #236a9c;outline-offset:2px}
+.reader dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px}
+.reader dt{color:#526172}
+.reader dd{margin:0}
+.links{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0}
+.status{color:#805615;background:#fff7df;padding:6px 10px;border-radius:6px}
+.prewrap{white-space:pre-line}
+.fulltext{border-top:.5px solid #d5dbe2;margin-top:16px;padding-top:8px}
+.fulltext,.prose{line-height:1.65}
+.fulltext h1,.fulltext h2,.fulltext h3{font-size:18px;font-weight:650;margin:24px 0 10px;line-height:1.5}
+.fulltext h4,.fulltext h5,.fulltext h6{font-size:14px;font-weight:650;margin:18px 0 8px;line-height:1.5}
+.fulltext p{margin:0 0 12px}
+.fulltext ul,.fulltext ol{padding-left:24px;margin:10px 0 16px}
+.fulltext li{margin:7px 0;padding-left:2px}
+.fulltext li>ul,.fulltext li>ol{margin:6px 0 10px}
+.fulltext li>p{margin:6px 0}
+.fulltext blockquote{margin:12px 0;color:#526172}
+.fulltext hr{border:0;border-top:.5px solid #d5dbe2;margin:24px 0}
+.math.inline{display:inline-block;max-width:100%;overflow-x:auto;vertical-align:middle;padding:2px 0;overflow-wrap:normal}
+.math.block,.math.display{display:block;max-width:100%;overflow-x:auto;margin:14px 0;padding:8px 0;overflow-wrap:normal}
+math{font-family:math;font-size:1em}
+math *{font-size:inherit}
+math :is(msub,msup,msubsup,munder,mover,munderover,mroot,mmultiscripts)>:not(:first-child){font-size:12px}
+.math-error{color:#805615;white-space:pre-wrap}
+.fulltext table{border-collapse:collapse;display:block;overflow-x:auto;max-width:100%;margin:0 0 8px}
+.fulltext th,.fulltext td{border:.5px solid #d5dbe2;padding:4px 8px;text-align:left;vertical-align:top}
+.fulltext pre{overflow-x:auto;background:#f1f5f7;border-radius:6px;padding:8px 10px;font-size:12px}
+.fulltext code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.empty{color:#526172;padding:12px 10px}
+@media (max-width:820px){
+ .layout{grid-template-columns:minmax(0,1fr)}
+ .index{position:static;max-height:50vh}
+ .reader dl{grid-template-columns:minmax(0,1fr)}
+ .reader dt{margin-top:6px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+{% endraw %}
+</style></head><body><main>
+<header>
+<h1>{{ date }} 论文日报</h1>
+{% if query_mode == "hybrid-current" %}<p class="note">本日报汇总 {{ date }} 抓取到的新论文，论文的首次提交日期可能不同。页面中的时间均为 UTC。</p>
+{% else %}<p class="note">论文按 arXiv 首次提交的 UTC 日期归入 {{ date }}，页面中的时间均为 UTC。</p>{% endif %}
+</header>
+<section aria-labelledby="progress-title">
+<h2 id="progress-title">完成情况</h2>
+<p>{{ status_text }}</p>
+{% if input_modes %}<p class="note">{{ input_modes }}</p>{% endif %}
+<dl class="stats">
+{% for label, value in stats %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+{% endfor %}</dl>
+{% if budget %}<div class="budget">
+<p><strong>预算按三种状态分开记录。</strong>已结算是已经确认的实际花费，未决预留是失败或中断请求暂时冻结的额度，执行中的请求另行预留，剩余可用是上限扣除已结算、未决预留和执行中预留后的余额。</p>
+<dl class="stats">
+{% for label, value in budget %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+{% endfor %}</dl>
+</div>{% endif %}
+</section>
+{% if has_papers %}<section aria-labelledby="index-title">
+<h2 id="index-title">论文索引</h2>
+<div class="controls">
+<div class="group" role="group" aria-label="研究方向过滤" id="directions"></div>
+<input type="search" id="query" aria-label="搜索标题、作者、编号或关键词" placeholder="搜索标题、作者、编号或关键词">
+</div>
+<p class="note" id="count" role="status" aria-live="polite"></p>
+<p class="note">排序依据：核心在前，同类内按综合评分从高到低。方向取自模型分析结果，评分仅用于排序参考。</p>
+<div class="layout">
+<nav class="index" aria-label="论文列表"><ul id="list"></ul></nav>
+<article class="reader" id="reader" tabindex="-1" aria-live="polite"><p class="note">请在论文索引中选择一篇论文。</p></article>
+</div>
+</section>
+{% else %}<section><p class="note">本次没有可展示的论文。</p></section>
+{% endif %}
+</main>
+{% if has_papers %}<script id="data" type="application/json">{{ data_json|safe }}</script>
+<script>
+{% raw %}
+(function(){
+var DATA=JSON.parse(document.getElementById("data").textContent);
+var papers=DATA.papers, directions=DATA.directions, MISSING=DATA.missing;
+var state={direction:"",query:"",selected:null};
+var listEl=document.getElementById("list"), readerEl=document.getElementById("reader");
+var countEl=document.getElementById("count"), dirEl=document.getElementById("directions");
+function el(tag,text,cls){var e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
+function rich(tag,markup,cls){var e=el(tag,undefined,cls);e.innerHTML=markup;return e}
+function dirName(key){for(var i=0;i<directions.length;i++)if(directions[i][0]===key)return directions[i][1];return key||MISSING}
+function link(href,text){var a=el("a",text);a.href=href;a.rel="noopener noreferrer";return a}
+function row(dl,name,value){dl.appendChild(el("dt",name));var d=el("dd");if(value&&value.nodeType)d.appendChild(value);else d.textContent=value;dl.appendChild(d)}
+function list(a){return a&&a.length?a.join("，"):MISSING}
+
+function buildFilters(){
+  var all=[["","全部"]].concat(directions);
+  all.forEach(function(d){
+    var b=el("button",d[1]);b.type="button";b.setAttribute("aria-pressed",d[0]===state.direction?"true":"false");
+    b.addEventListener("click",function(){state.direction=d[0];refresh();
+      Array.prototype.forEach.call(dirEl.children,function(c,i){c.setAttribute("aria-pressed",all[i][0]===state.direction?"true":"false")})});
+    dirEl.appendChild(b);
+  });
+}
+function matches(p){
+  if(state.direction&&p.direction!==state.direction)return false;
+  if(!state.query)return true;
+  var hay=[p.id,p.title,p.authors.join(" "),p.analysis?p.analysis.terms.join(" "):"",p.analysis?p.analysis.one_line:""].join(" ").toLowerCase();
+  return state.query.split(/\s+/).every(function(t){return hay.indexOf(t)>=0});
+}
+function refresh(){
+  var shown=papers.filter(matches);
+  listEl.textContent="";
+  shown.forEach(function(p){
+    var li=el("li"),b=el("button");b.type="button";b.dataset.id=p.id;
+    b.appendChild(rich("span",p.title_html,"item-title"));
+    var score=p.weighted===null||p.weighted===undefined?"评分未记录":"评分 "+p.weighted;
+    b.appendChild(el("span",p.id+"，"+p.level+"，"+dirName(p.direction)+"，"+score,"item-meta"));
+    if(p.id===state.selected)b.setAttribute("aria-current","true");
+    b.addEventListener("click",function(){select(p.id,true)});
+    li.appendChild(b);listEl.appendChild(li);
+  });
+  if(!shown.length)listEl.appendChild(el("li","没有符合条件的论文。","empty"));
+  countEl.textContent="显示 "+shown.length+" 篇，共 "+papers.length+" 篇。";
+}
+function select(id,focus){
+  var p=papers.filter(function(x){return x.id===id})[0];if(!p)return;
+  state.selected=id;
+  Array.prototype.forEach.call(listEl.querySelectorAll("button"),function(b){
+    if(b.dataset.id===id)b.setAttribute("aria-current","true");else b.removeAttribute("aria-current")});
+  render(p);
+  if(history.replaceState)history.replaceState(null,"","#"+id);
+  if(focus){readerEl.focus({preventScroll:true});if(window.matchMedia("(max-width:820px)").matches)readerEl.scrollIntoView({block:"start"})}
+}
+function render(p){
+  readerEl.textContent="";
+  readerEl.appendChild(rich("h2",p.title_html));
+  var links=el("div",undefined,"links");
+  if(p.abs_url)links.appendChild(link(p.abs_url,"arXiv 页面"));
+  if(p.pdf_url)links.appendChild(link(p.pdf_url,"PDF 原文"));
+  if(!p.abs_url&&!p.pdf_url)links.appendChild(el("span","原文链接："+MISSING));
+  readerEl.appendChild(links);
+  if(p.editorial_note)readerEl.appendChild(el("p",p.editorial_note,"pending"));
+  var dl=el("dl");
+  row(dl,"arXiv 编号",p.id+" 版本 "+p.version);
+  row(dl,"作者",list(p.authors));
+  row(dl,"分类",p.primary_category+(p.categories.length?"，全部分类 "+p.categories.join("，"):""));
+  row(dl,"分析方向",dirName(p.direction)+"，"+p.level);
+  row(dl,"首次提交",p.published);
+  row(dl,"最近更新",p.updated);
+  row(dl,"作者备注",p.comment);
+  readerEl.appendChild(dl);
+  readerEl.appendChild(el("h3","摘要"));
+  readerEl.appendChild(rich("div",p.abstract_html,"prose"));
+
+  readerEl.appendChild(el("h3","摘要级分析"));
+  var a=p.analysis;
+  if(!a){readerEl.appendChild(el("p","这篇论文没有摘要级分析记录。","status"))}
+  else{
+    readerEl.appendChild(el("p",a.one_line));
+    readerEl.appendChild(rich("div",a.detail_html,"prose"));
+    var d2=el("dl");
+    row(d2,"关键词",list(a.terms));
+    row(d2,"相关工作背景",a.related);
+    row(d2,"模型给出的机构",list(a.affiliations));
+    var code=a.has_code===true?"模型判断有公开代码":a.has_code===false?"摘要中未确认公开代码":MISSING;
+    var codeNode=el("span",code);
+    if(a.code_url){codeNode.appendChild(document.createTextNode("，模型给出的地址 "));codeNode.appendChild(link(a.code_url,a.code_url))}
+    row(d2,"模型给出的代码状态",codeNode);
+    a.scores.forEach(function(s){row(d2,s[0],s[1]===null||s[1]===undefined?MISSING:String(s[1]))});
+    readerEl.appendChild(d2);
+    readerEl.appendChild(el("p","机构与代码状态由模型根据摘要生成，没有逐篇核验，不能当作已证实的信息。","note"));
+  }
+
+  var ft=el("section",undefined,"fulltext");ft.setAttribute("aria-label","扩展解读");
+  ft.appendChild(el("h3","扩展解读"));
+  if(p.report_html){var body=el("div");body.innerHTML=p.report_html;ft.appendChild(body)}
+  else ft.appendChild(el("p","这篇论文没有扩展解读，上方只有摘要与摘要级分析。","status"));
+  readerEl.appendChild(ft);
+  requestAnimationFrame(markScrollableMath);
+}
+function markScrollableMath(){
+  readerEl.querySelectorAll('.math').forEach(function(node){
+    if(node.scrollWidth>node.clientWidth+1){node.tabIndex=0;node.setAttribute('aria-label','公式，可左右滚动')}
+    else{node.removeAttribute('tabindex');node.removeAttribute('aria-label')}
+  });
+}
+window.addEventListener('resize',markScrollableMath);
+buildFilters();
+document.getElementById("query").addEventListener("input",function(e){state.query=e.target.value.trim().toLowerCase();refresh()});
+refresh();
+var hash=decodeURIComponent(location.hash.slice(1));
+if(hash)select(hash,false);
+})();
+{% endraw %}
+</script>{% endif %}
+</body></html>

@@ -1,6 +1,6 @@
 # arXiv Daily Papers Workflow
 
-Collect arXiv papers, filter them against research interests, and generate scored Markdown reports with optional PDF analysis and email digests. The supplied profile covers embodied AI and VLA, world models, autonomous driving, agentic AI, and robotics. Analysis prompts currently produce Chinese text.
+Collect arXiv papers, filter them against research interests, and generate scored HTML and Markdown reports with optional PDF analysis and email digests. The supplied profile covers embodied AI and VLA, world models, autonomous driving, agentic AI, and robotics. Analysis prompts currently produce Chinese text.
 
 Agentic AI includes software, web, GUI and coding agents, tool use, memory, planning, multi-agent coordination and evaluation. Robotics includes manipulation, locomotion, navigation, SLAM, perception, control, hardware and simulation. Each direction is independently relevant: software agents do not need physical robot experiments, and robotics papers do not need a foundation model to qualify as core research.
 
@@ -48,7 +48,10 @@ With the commands above, trial results are stored under `storage/data/trial`. A 
 
 | Path | Content |
 | --- | --- |
-| `reports/YYYY-MM-DD.md` | Daily report |
+| `reports/YYYY-MM-DD.html` | Offline reading page with formulas, search and direction filters |
+| `reports/latest.html` | Latest dated HTML report; historical backfills do not replace it |
+| `reports/YYYY-MM-DD.md` | Markdown report |
+| `checkpoints/YYYY-MM-DD.json` | Saved classifications and completed model outputs |
 | `papers_index.json` | Persistent index used to avoid processing papers again |
 | `run-metadata/YYYY-MM-DD.json` | Collection counts and processing outcome |
 
@@ -68,7 +71,7 @@ Full runs follow the PDF settings in YAML and enable DeepResearch unless disable
 
 ## 3. Configure an instance
 
-`config/config.yaml` contains research directions, keyword rules, model IDs, scoring weights, PDF settings, and concurrency. Set `PAPERS_CONFIG` to use an instance-specific YAML copy without editing the checkout. Changing keywords within an existing direction only requires YAML changes; adding a new direction also requires updating `prompts/relevance_filter.txt` and `DIRECTION_DISPLAY` in `src/report_generator.py`.
+`config/config.yaml` contains research directions, keyword rules, model IDs, scoring weights, PDF settings, and concurrency. Set `PAPERS_CONFIG` to use an instance-specific YAML copy without editing the checkout. Changing keywords within an existing direction only requires YAML changes; adding a new direction also requires updating `prompts/relevance_filter.txt`, `DIRECTION_DISPLAY` in `src/report_generator.py`, and `DIRECTIONS` in `src/html_report.py`.
 
 | Variable | Purpose and default |
 | --- | --- |
@@ -78,6 +81,7 @@ Full runs follow the PDF settings in YAML and enable DeepResearch unless disable
 | `PAPERS_QUICK_START` | Set to `1` to use the isolated trial mode from a service environment file |
 | `PAPERS_BUDGET_USD` | Optional per-run model budget in USD; requires matching model price policies under `budget.models` |
 | `MAX_PAPERS` | Maximum new candidates per run; `0` means no limit |
+| `PAPERS_DATE_MODE` | `current` by default; `previous-day` selects yesterday in UTC for a scheduled full-date query |
 | `REPORT_DATE` | Optional UTC first-submission date in `YYYY-MM-DD` format |
 | `SKIP_DEEP_RESEARCH` | Set to `1` to skip extended PDF-based analysis |
 | `SKIP_EMAIL` | Set to `1` to suppress email |
@@ -90,7 +94,9 @@ Real collection prepares the output directories and checks that they can be writ
 
 For a budgeted full run, disable trial mode and set `PAPERS_BUDGET_USD`, for example `30`. The program checks current model context limits and pricing, restricts provider prices and output length, and reserves the maximum possible cost before each request, including retries. The reservation covers the full advertised input context, so the run can stop conservatively before spending the entire budget. Unknown request costs keep their full reservation. This is a local run budget, not an OpenRouter account or key limit.
 
-Budget records live in `run-metadata/YYYY-MM-DD.budget.json`. An existing ledger is never silently reset. Use a new data directory for a separately authorized run. Checkpoints retain classifications, completed analyses and deep research. A budget stop writes a partial report with status `budget_exhausted`, suppresses email and publishing, leaves the deduplication index unchanged, and exits with status 3. Resuming paid work from checkpoints is not yet automated.
+Budget records live in `run-metadata/YYYY-MM-DD.budget.json`. An existing ledger is never silently reset. Use a new data directory for a separately authorized run. Checkpoints retain classifications, completed analyses and deep research. A budget stop writes a partial report with status `budget_exhausted`, suppresses email and publishing, leaves the deduplication index unchanged, and exits with status 3. Resuming paid work from checkpoints is not yet automated. Other per-paper failures save available results with status `partial` and exit code 2, without updating the index, emailing, or publishing.
+
+For daily scheduling, set `PAPERS_DATE_MODE=previous-day`; an explicit `REPORT_DATE` takes priority. Completed non-trial daily reports are reused without network requests when the dated HTML, Markdown and successful metadata already exist. Keep any existing budget ledger after a failed run: do not delete it to retry. The HTML embeds its styles, scripts and rendered MathML, so reading it does not require external assets.
 
 Email is optional. Configure all of `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, and `MAIL_TO` to use SMTP with STARTTLS. Missing settings skip email. The username, sender, and recipient may differ. An `email_sent` result means SMTP accepted the message, not that it reached the inbox.
 

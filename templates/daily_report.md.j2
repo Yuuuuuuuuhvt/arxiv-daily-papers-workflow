@@ -5,6 +5,9 @@
 {% if run_status == "budget_exhausted" %}
 > 本次运行因预算不足而提前停止。以下仅包含已完成的分析，完整进度和费用保存在运行记录与检查点中。
 {% endif %}
+{% if run_status == "partial" %}
+> 本次运行存在未完成的论文。以下保留已经完成的分析，失败阶段保存在运行记录中。
+{% endif %}
 
 ## Overview
 

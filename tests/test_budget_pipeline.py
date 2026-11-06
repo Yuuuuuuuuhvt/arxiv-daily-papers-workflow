@@ -138,3 +138,42 @@ def test_large_pdf_reads_every_page_and_rejects_empty_text(monkeypatch, tmp_path
     blank.write(path)
     with pytest.raises(ValueError, match="no extractable text"):
         asyncio.run(deep_research.generate_deep_research(paper, {"model_id": "test"}, "test", config))
+
+
+def test_partial_pdf_failure_still_saves_readable_results(monkeypatch, tmp_path):
+    config = load_config()
+    config["pdf"]["download_enabled"] = False
+    monkeypatch.setattr(main, "load_config", lambda: config)
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(main, "setup_logging", lambda: None)
+    for key, value in {"OPENROUTER_API_KEY": "test", "REPORT_DATE": "2026-11-04",
+                       "MAX_PAPERS": "0", "SKIP_DEEP_RESEARCH": "0", "SKIP_EMAIL": "0",
+                       "SKIP_GIT_PUSH": "0", "GITHUB_ACTIONS": "true"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("PAPERS_BUDGET_USD", raising=False)
+    day = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    paper = ArxivPaper("example", 1, "Synthetic", "Abstract", [], [], "cs.RO",
+                       day, day, "https://example.test/a.pdf", "https://example.test/a")
+    monkeypatch.setattr(main, "hybrid_fetch", lambda *args: [paper])
+    async def classify(*args):
+        return [paper], []
+    async def analyze(*args):
+        return AnalysisResult(one_line_summary="保存的摘要分析", direction="robotics")
+    async def research(*args, **kwargs):
+        raise FileNotFoundError("PDF not available")
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Partial runs must not publish")
+    monkeypatch.setattr(main, "filter_relevance", classify)
+    monkeypatch.setattr(main, "analyze_paper", analyze)
+    monkeypatch.setattr(main, "generate_deep_research", research)
+    monkeypatch.setattr(main, "send_digest", unexpected)
+    monkeypatch.setattr(main, "commit_and_push_data", unexpected)
+    with pytest.raises(SystemExit) as stopped:
+        asyncio.run(main.run_pipeline())
+    assert stopped.value.code == 2
+    summary = json.loads((tmp_path / "run-metadata/2026-11-04.json").read_text())
+    assert summary["status"] == "partial" and summary["deep_research_pending"] == 1
+    assert summary["errors"][0]["error"] == "FileNotFoundError"
+    assert "保存的摘要分析" in (tmp_path / "reports/2026-11-04.html").read_text()
+    assert not (tmp_path / "papers_index.json").exists()
+    assert (tmp_path / "checkpoints/2026-11-04.json").is_file()

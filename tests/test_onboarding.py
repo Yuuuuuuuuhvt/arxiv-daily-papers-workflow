@@ -116,3 +116,28 @@ def test_unwritable_output_fails_before_collection(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as error:
         asyncio.run(main.run_pipeline(quick_start=True))
     assert error.value.code == 2
+
+
+def test_daily_utc_date_and_completed_run_are_idempotent(monkeypatch, tmp_path):
+    monkeypatch.setenv("PAPERS_DATE_MODE", "previous-day")
+    monkeypatch.delenv("REPORT_DATE", raising=False)
+    assert main.resolve_report_date(datetime.fromisoformat("2026-11-06T23:30:00-05:00")) == "2026-11-06"
+    monkeypatch.setenv("REPORT_DATE", "2026-01-01")
+    assert main.resolve_report_date() == "2026-01-01"
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(main, "setup_logging", lambda: None)
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Completed daily runs must not make requests")
+    monkeypatch.setattr(main, "hybrid_fetch", unexpected)
+    monkeypatch.setattr(main, "_load_run_budget", unexpected)
+    report_generator.save_report("first", "2026-01-01", tmp_path)
+    report_generator.save_html_report("first", "2026-01-01", tmp_path)
+    main.save_run_summary("2026-01-01", {"status": "completed"}, tmp_path)
+    asyncio.run(main.run_pipeline())
+    report_generator.save_html_report("newer", "2026-01-02", tmp_path)
+    report_generator.save_html_report("backfill", "2025-12-31", tmp_path)
+    assert (tmp_path / "reports/latest.html").read_text() == "newer"
+    monkeypatch.setenv("PAPERS_DATE_MODE", "invalid")
+    with pytest.raises(ValueError, match="PAPERS_DATE_MODE"):
+        main.resolve_report_date()

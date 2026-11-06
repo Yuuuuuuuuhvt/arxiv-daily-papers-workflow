@@ -22,16 +22,16 @@ Data flow:
     -> LLM batch classify (core / peripheral / not_relevant)
     -> LLM per-paper analysis (scores, tags, summary)
     -> Download PDFs -> LLM per-paper scholarly analysis (with PDF)
-    -> Jinja2 render report -> save to data/reports/YYYY-MM-DD.md
+    -> Jinja2 render report -> save dated Markdown and offline HTML, plus reports/latest.html
 ```
 
 ### Key Design Decisions
 
 1. **Hybrid fetch**: API (keyword search) + RSS (announce type metadata) combined. RSS provides `new`/`replace`/`cross` classification; API provides deep keyword matching.
 2. **3-tier relevance**: `core` means a direct contribution to a tracked direction; `peripheral` means supporting context or an indirect connection; `not_relevant` means outside scope. Agentic and Robotics papers do not need a foundation model to qualify as core. Only core papers get DeepResearch.
-3. **PDF via base64**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files <=15 MB use `native` engine (Gemini sees figures/tables); larger files degrade to `pdf-text`.
+3. **PDF via base64**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files up to 5 MiB use native document input. Larger PDFs use local pypdf extraction of every page, without image pixels or OCR.
 4. **Concurrency**: `asyncio.Semaphore` controls parallel LLM calls (`max_concurrent_llm` for analysis, `max_concurrent_pdf` for DeepResearch).
-5. **Fail-safe**: Every LLM stage has fallback — parse failures default to `peripheral`, analysis failures use defaults, DeepResearch falls back from PDF to text-only.
+5. **Fail-safe**: Every LLM stage has fallback — parse failures default to `peripheral`, analysis failures use defaults, DeepResearch only falls back to abstract input when require_pdf is false; strict failures produce a partial report.
 
 ---
 
@@ -49,7 +49,8 @@ src/                        # Python package, run via: python -m src.main
   deep_analysis.py          # Per-paper structured analysis (scores, tags, affiliations)
   deep_research.py          # Per-paper 3-module scholarly analysis (with PDF support)
   pdf_downloader.py         # Async PDF download from arXiv
-  report_generator.py       # Jinja2 report + email HTML rendering
+  report_generator.py       # Markdown/email rendering and report persistence
+  html_report.py             # Offline daily HTML with sanitized Markdown and MathML
   email_sender.py           # 通用 SMTP STARTTLS 发信，返回实际提交结果
   git_ops.py                # Data submodule commit + push (CI only)
 config/
@@ -61,6 +62,7 @@ prompts/
   deep_research.txt         # System prompt for scholarly deep-dive (Chinese output)
 templates/
   daily_report.md.j2        # Markdown report template
+  daily_report.html.j2      # Offline daily reading page
   email_digest.html.j2      # Email HTML template
 tests/                      # pytest unit tests
 data/                       # Runtime data (gitignored, or git submodule)
@@ -88,7 +90,7 @@ data/                       # Runtime data (gitignored, or git submodule)
 
 - **LLM calls**: 3 retries with exponential backoff (2s, 4s, 8s) for retryable errors (429, 5xx, timeout). Non-retryable errors (KeyError, ValueError) break immediately.
 - **Parsing LLM output**: Always handle malformed JSON gracefully — default to safe values (`peripheral` for relevance, default scores for analysis, empty string for DeepResearch).
-- **PDF processing**: 3-tier fallback: base64+native -> base64+pdf-text -> text-only. Never crash the pipeline over a PDF failure.
+- **PDF processing**: Small PDFs use native input; large PDFs use full-page local text extraction. require_pdf=true rejects missing or unusable PDFs. The pipeline preserves completed results and returns partial status for per-paper failures.
 
 ### Configuration
 
@@ -129,7 +131,7 @@ pytest tests/ -v
 
 1. Add keyword block in `config/config.yaml` under `research_directions`.
 2. Update `prompts/relevance_filter.txt` to describe the new direction for LLM classification.
-3. Add display name in `report_generator.py` `DIRECTION_DISPLAY` dict.
+3. Add display names in `report_generator.py` `DIRECTION_DISPLAY` and `html_report.py` `DIRECTIONS`.
 
 ### Adding a New Pipeline Stage
 
@@ -153,7 +155,7 @@ pytest tests/ -v
 
 ## Known Constraints and Gotchas
 
-1. **OpenRouter native PDF engine**: Intermittent 502 when OpenRouter fetches PDF URLs server-side. Solved by sending base64-encoded local PDFs instead. Files >15 MB may still timeout with native engine — auto-degrades to `pdf-text`.
+1. **OpenRouter native PDF engine**: Intermittent 502 when OpenRouter fetches PDF URLs server-side. Solved by sending base64-encoded local PDFs instead. Files above 5 MiB use local pypdf extraction before model input.
 
 2. **arXiv rate limiting**: The `arxiv` library respects rate limits, but `api_delay_seconds` (default 3s) adds extra safety. PDF downloads from arxiv.org may get 429'd under heavy concurrency — `pdf_downloader.py` uses a semaphore (default 5).
 
