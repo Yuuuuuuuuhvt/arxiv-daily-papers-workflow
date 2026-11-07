@@ -108,6 +108,8 @@ def test_unverifiable_structures_raise_instead_of_dropping_figures(tmp_path):
     cases = {
         "missing image": {"main.tex": base % "\\includegraphics{nothing}"},
         "missing input": {"main.tex": base % "\\input{nothing}"},
+        "external listing": {"main.tex": base % "\\lstinputlisting{algorithm.py}"},
+        "unsupported include": {"main.tex": base % "\\subincludefrom{appendix/}{results}"},
         "cycle": {"main.tex": base % "\\input{a}", "a.tex": "\\input{b}", "b.tex": "\\input{a}"},
         "generated tikz": {"main.tex": base % "\\begin{figure}\\begin{tikzpicture}\\end{tikzpicture}\\end{figure}"},
         "dynamic image name": {"main.tex": base % "\\includegraphics{\\figdir/a}", "a.png": b"x"},

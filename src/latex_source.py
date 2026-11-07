@@ -306,6 +306,7 @@ _BIB_COMMAND = re.compile(
 
 # Constructs that draw or load content in a way this module does not follow.
 _UNSUPPORTED = {
+    r"\\(?:includefrom|subincludefrom|inputfrom|subinputfrom|lstinputlisting|inputminted|verbatiminput|VerbatimInput|csvreader|pgfplotstableread)(?![a-zA-Z@])": "external content command not expanded",
     r"\\begin\{(?:tikzpicture|pgfpicture|pspicture|picture|axis|circuitikz|tikzcd|forest)\}": "generated picture environment",
     r"\\(?:tikz|pgfpicture|pgfimage|pgfdeclareimage)(?![a-zA-Z@])": "generated or pgf image command",
     r"\\(?:epsfig|psfig|epsfbox|includepdf|includesvg|includestandalone|includeinkscape)(?![a-zA-Z@])": "image command other than includegraphics",
@@ -327,10 +328,11 @@ def _mask_verbatim(text: str) -> str:
 def _drop_iffalse(text: str) -> str:
     out: list[str] = []
     pos = 0
-    while match := _IFFALSE.search(text, pos):
+    scan = _mask_verbatim(text)
+    while match := _IFFALSE.search(scan, pos):
         out.append(text[pos:match.start()])
         depth, in_else, kept_from, closed = 1, False, match.end(), False
-        for token in _IF_TOKEN.finditer(text, match.end()):
+        for token in _IF_TOKEN.finditer(scan, match.end()):
             name = token.group(1)
             if name == "fi":
                 depth -= 1
