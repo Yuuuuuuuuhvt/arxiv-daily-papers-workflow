@@ -52,6 +52,9 @@ def load_config() -> dict:
         value = concurrency.get(name, 1)
         if type(value) is not int or value < 1:
             raise ValueError(f"concurrency.{name} must be a positive integer")
+    paper_input = config.get("paper_input", {})
+    if not isinstance(paper_input, dict) or type(paper_input.get("prefer_latex", True)) is not bool:
+        raise ValueError("paper_input must be a mapping with a boolean prefer_latex")
     return config
 
 

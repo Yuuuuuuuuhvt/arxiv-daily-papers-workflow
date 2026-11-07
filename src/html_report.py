@@ -44,6 +44,8 @@ OPTIONAL_SUMMARY_FIELDS = [
     (("deep_research_skipped",), "跳过扩展解读"),
 ]
 INPUT_MODE_FIELDS = [
+    ("latex_image_count", "LaTeX 正文与引用图片"),
+    ("pdf_page_image_count", "PDF 整页图像输入"),
     ("pdf_native_count", "原生 PDF 输入"),
     ("pdf_text_count", "PDF 文本输入"),
     ("pdf_abstract_count", "仅摘要输入"),

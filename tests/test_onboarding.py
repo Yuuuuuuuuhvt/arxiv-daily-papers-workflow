@@ -52,6 +52,11 @@ def test_external_paths_and_invalid_yaml(monkeypatch, tmp_path):
     settings.write_text(yaml.safe_dump(original), encoding="utf-8")
     with pytest.raises(ValueError, match="max_concurrent_llm"):
         config.load_config()
+    original["concurrency"]["max_concurrent_llm"] = 1
+    original["paper_input"] = {"prefer_latex": "false"}
+    settings.write_text(yaml.safe_dump(original), encoding="utf-8")
+    with pytest.raises(ValueError, match="prefer_latex"):
+        config.load_config()
 
 
 def test_trial_writes_real_report_and_index_without_external_side_effects(monkeypatch, tmp_path):

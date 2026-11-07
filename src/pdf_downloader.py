@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import hashlib
+import json
+import os
+import tempfile
 from pathlib import Path
 
 import httpx
@@ -9,6 +13,17 @@ import httpx
 from .models import ArxivPaper
 
 logger = logging.getLogger(__name__)
+
+
+def verified_pdf_path(paper: ArxivPaper, output_dir: Path) -> Path | None:
+    dest = output_dir / f"{paper.arxiv_id}.pdf"
+    try:
+        record = json.loads(dest.with_suffix(".pdf.json").read_text())
+        if record["version"] == paper.version and record["sha256"] == hashlib.sha256(dest.read_bytes()).hexdigest():
+            return dest
+    except (OSError, ValueError, KeyError):
+        pass
+    return None
 
 
 def _alphaxiv_pdf_url(paper: ArxivPaper) -> str:
@@ -21,11 +36,12 @@ async def download_pdf(
     sem: asyncio.Semaphore,
 ) -> Path | None:
     dest = output_dir / f"{paper.arxiv_id}.pdf"
-    if dest.exists():
+    if verified_pdf_path(paper, output_dir):
         logger.debug("PDF already exists: %s", dest)
         return dest
 
-    urls = [paper.pdf_url, _alphaxiv_pdf_url(paper)]
+    # A source archive and its fallback PDF must refer to the exact same version.
+    urls = [f"https://arxiv.org/pdf/{paper.arxiv_id}v{paper.version}", _alphaxiv_pdf_url(paper)]
 
     async with sem:
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
@@ -33,7 +49,15 @@ async def download_pdf(
                 try:
                     resp = await client.get(url)
                     resp.raise_for_status()
-                    dest.write_bytes(resp.content)
+                    if not resp.content.startswith(b"%PDF-"):
+                        raise ValueError("Downloaded response is not a PDF")
+                    with tempfile.NamedTemporaryFile(dir=output_dir, delete=False) as out:
+                        out.write(resp.content)
+                        temporary = out.name
+                    os.replace(temporary, dest)
+                    dest.with_suffix(".pdf.json").write_text(json.dumps({
+                        "version": paper.version, "url": url,
+                        "sha256": hashlib.sha256(resp.content).hexdigest()}) + "\n")
                     logger.info("Downloaded PDF: %s from %s (%.1f MB)",
                                 paper.arxiv_id, url.split("/")[2], len(resp.content) / 1e6)
                     return dest

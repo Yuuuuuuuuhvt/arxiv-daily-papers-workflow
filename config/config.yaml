@@ -244,6 +244,9 @@ concurrency:
   max_concurrent_llm: 10
   max_concurrent_pdf: 5
 
+paper_input:
+  prefer_latex: true  # Source text and every referenced image; complete PDF pages on failure.
+
 pdf:
   download_enabled: true
   storage_dir: "storage/pdfs"

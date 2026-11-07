@@ -98,6 +98,9 @@ class RunBudget:
                     "completion_price_per_million": _decimal(
                         f"{model}.completion_price_per_million",
                         p["completion_price_per_million"]),
+                    "supports_images": p.get("supports_images") is True,
+                    "image_price_per_image": _decimal(
+                        f"{model}.image_price_per_image", p.get("image_price_per_image", 0)),
                 }
             except KeyError as exc:
                 raise ValueError(f"policy for {model} lacks {exc}") from None
@@ -130,11 +133,12 @@ class RunBudget:
     def policy(self, model: str) -> dict | None:
         return self.policies.get(model)
 
-    def worst_case_cost(self, model: str, max_tokens: int) -> Decimal:
+    def worst_case_cost(self, model: str, max_tokens: int, image_count: int = 0) -> Decimal:
         p = self.policies[model]
         return _ceil(
             p["context_length"] * p["prompt_price_per_million"] / _MILLION
             + max_tokens * p["completion_price_per_million"] / _MILLION
+            + image_count * p["image_price_per_image"]
         )
 
     def snapshot(self) -> dict:
@@ -150,10 +154,12 @@ class RunBudget:
             "requests": [dict(r) for r in self._requests.values()],
         }
 
-    async def reserve(self, model: str, max_tokens: int, attempt: int = 1) -> int:
+    async def reserve(self, model: str, max_tokens: int, attempt: int = 1, image_count: int = 0) -> int:
         """Reserve the worst-case cost of one attempt, waiting for in-flight
         requests to settle when the remaining headroom is too small."""
-        worst = self.worst_case_cost(model, max_tokens)
+        if type(image_count) is not int or image_count < 0:
+            raise ValueError("image_count must be a non-negative integer")
+        worst = self.worst_case_cost(model, max_tokens, image_count)
         async with self._cond:
             while True:
                 if self.stopped:
@@ -181,6 +187,7 @@ class RunBudget:
                 "model": model,
                 "attempt": attempt,
                 "max_tokens": max_tokens,
+                "image_count": image_count,
                 "reserved_usd": float(worst),
                 "status": "reserved",
                 "http_status": None,

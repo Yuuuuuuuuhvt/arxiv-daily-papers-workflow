@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 
@@ -19,7 +21,7 @@ BACKOFF_SECONDS = [2, 4, 8]
 # compatibility alias. Any other engine (e.g. mistral-ocr) is billed per page.
 FREE_OR_TOKEN_PDF_ENGINES = {"native", "cloudflare-ai", "pdf-text"}
 # Content types whose cost is covered by the input-token reservation.
-BILLED_AS_TOKENS_CONTENT = {"text", "file"}
+BILLED_AS_TOKENS_CONTENT = {"text", "file", "image_url"}
 
 
 def _validate_budgeted_request(
@@ -52,6 +54,17 @@ def _validate_budgeted_request(
             if kind not in BILLED_AS_TOKENS_CONTENT:
                 raise ValueError(f"unbudgeted content type: {kind}")
             has_file = has_file or kind == "file"
+            if kind == "image_url":
+                if not budget.policy(model)["supports_images"]:
+                    raise ValueError("model has no verified image budget policy")
+                url = (part.get("image_url") or {}).get("url", "")
+                if not isinstance(url, str) or not url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,")):
+                    raise ValueError("budgeted images must be inline PNG or JPEG")
+                try:
+                    if not base64.b64decode(url.split(",", 1)[1], validate=True):
+                        raise ValueError("empty image")
+                except (ValueError, binascii.Error) as exc:
+                    raise ValueError("invalid inline image") from exc
     if has_file and not plugins:
         # Without an explicit engine OpenRouter may fall back to paid OCR.
         raise ValueError("file content requires an explicit file-parser engine")
@@ -228,6 +241,8 @@ async def call_llm(
         "model": model,
         "messages": messages,
         "temperature": temperature,
+        # Complete documents must fail on context overflow, not lose middle sections.
+        "transforms": [],
     }
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
@@ -240,6 +255,11 @@ async def call_llm(
         payload["stream_options"] = {"include_usage": True}
 
     budget = current_budget.get()
+    image_count = sum(
+        part.get("type") == "image_url"
+        for message in messages if isinstance(message.get("content"), list)
+        for part in message["content"]
+    )
     if budget is not None:
         payload["max_tokens"] = _validate_budgeted_request(
             budget, model, messages, max_tokens, plugins
@@ -253,6 +273,8 @@ async def call_llm(
                 "request": 0,
             },
         }
+        if image_count:
+            payload["provider"]["max_price"]["image"] = float(policy["image_price_per_image"])
 
     last_exc: Exception | None = None
     attempts = 0
@@ -261,7 +283,7 @@ async def call_llm(
         # Every attempt, retries included, needs its own reservation. The
         # reservation sits outside the try so BudgetExceeded is never retried.
         rid = (
-            await budget.reserve(model, payload["max_tokens"], attempt + 1)
+            await budget.reserve(model, payload["max_tokens"], attempt + 1, image_count=image_count)
             if budget is not None
             else None
         )

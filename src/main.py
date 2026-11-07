@@ -128,7 +128,19 @@ async def _load_run_budget(config: dict, data_dir: Path, date_str: str) -> RunBu
                     raise ValueError(f"Published {field} price exceeds the budget policy for {model_id}")
         if Decimal(str(pricing.get("request", "0"))) != 0:
             raise ValueError("Per-request fees are not supported by this budget policy")
-        verified[model_id] = {**policy, "context_length": context_length}
+        supports_images = "image" in model.get("architecture", {}).get("input_modalities", [])
+        image_cap = Decimal(str(policy.get("image_price_per_image", prompt_cap)))
+        if not image_cap.is_finite() or image_cap < 0:
+            raise ValueError("image_price_per_image must be finite and non-negative")
+        for tier in [pricing, *pricing.get("overrides", [])]:
+            image_price = Decimal(str(tier.get("image", pricing.get("image", "0"))))
+            if not image_price.is_finite() or image_price < 0 or image_price > image_cap:
+                supports_images = False
+        # The token reservation covers the whole input context. Also reserve
+        # per-image fees and enforce that cap at provider routing.
+        verified[model_id] = {**policy, "context_length": context_length,
+                              "supports_images": supports_images,
+                              "image_price_per_image": image_cap}
     return RunBudget(limit, data_dir / "run-metadata" / f"{date_str}.budget.json", verified,
                      max_output_tokens=settings.get("max_output_tokens", 8192))
 
@@ -311,7 +323,9 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
         async def research_one(paper: ArxivPaper) -> None:
             async with sem_pdf:
                 report = await generate_deep_research(paper, config["models"]["deep_analysis"], api_key,
-                    pdf_config=pdf_config if pdf_config.get("download_enabled") else None)
+                    pdf_config=pdf_config if pdf_config.get("download_enabled") else None,
+                    source_config={"storage_dir": str(data_dir / "paper-inputs"),
+                                   **config.get("paper_input", {})})
                 if report:
                     deep_reports[paper.arxiv_id] = report
                 logger.info("DeepResearch completed %s (%d chars)", paper.arxiv_id, len(report))
@@ -346,7 +360,9 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
                    deep_research_completed=len(deep_reports), deep_research_pending=pending,
                    deep_research_skipped=skip_research, errors=errors)
     for field, prefix in (("pdf_native_count", "> 输入依据：PDF 原文"),
-                          ("pdf_text_count", "> 输入依据：PDF 全部页面"),
+                          ("latex_image_count", "> 输入依据：LaTeX 正文与引用图片"),
+                          ("pdf_page_image_count", "> 输入依据：PDF 全部页面图像"),
+                          ("pdf_text_count", "> 输入依据：PDF 全部页面提取的正文"),
                           ("pdf_abstract_count", "> 输入依据：仅论文摘要")):
         summary[field] = sum(report.startswith(prefix) for report in deep_reports.values())
     if budget is not None:

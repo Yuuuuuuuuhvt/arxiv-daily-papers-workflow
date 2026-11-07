@@ -231,6 +231,34 @@ def test_client_payload_price_caps_and_retry_accounting(tmp_path, monkeypatch):
     assert snap["requests"][0]["finish_reason"] == "length"
     assert snap["spent_usd"] == pytest.approx(0.0001)
 
+    async def vision():
+        mode["special"] = "400"
+        requests.clear()
+        message = [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,YWJj"}},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,YWJj"}}]}]
+        policy = {MODEL: {**POLICIES[MODEL], "supports_images": True, "image_price_per_image": "0.002"}}
+        guarded = RunBudget("0.004", tmp_path / "vision-low.json", policy, max_output_tokens=100)
+        token = current_budget.set(guarded)
+        try:
+            with pytest.raises(BudgetExceeded):
+                await llm_client.call_llm(MODEL, message)
+            assert requests == []
+        finally:
+            current_budget.reset(token)
+        funded = RunBudget("1", tmp_path / "vision-ok.json", policy, max_output_tokens=100)
+        token = current_budget.set(funded)
+        try:
+            with pytest.raises(RuntimeError):
+                await llm_client.call_llm(MODEL, message)
+        finally:
+            current_budget.reset(token)
+        assert requests[0]["provider"]["max_price"]["image"] == 0.002
+        assert requests[0]["transforms"] == []
+        record = funded.snapshot()["requests"][0]
+        assert record["image_count"] == 2 and record["reserved_usd"] == pytest.approx(0.0052)
+    asyncio.run(vision())
+
 
 def test_streaming_file_call_ledger_protection(tmp_path, monkeypatch):
     def sse(*events: dict | str) -> bytes:

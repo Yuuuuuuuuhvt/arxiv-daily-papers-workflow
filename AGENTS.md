@@ -29,7 +29,7 @@ Data flow:
 
 1. **Hybrid fetch**: API (keyword search) + RSS (announce type metadata) combined. RSS provides `new`/`replace`/`cross` classification; API provides deep keyword matching.
 2. **3-tier relevance**: `core` means a direct contribution to a tracked direction; `peripheral` means supporting context or an indirect connection; `not_relevant` means outside scope. Agentic and Robotics papers do not need a foundation model to qualify as core. Only core papers get DeepResearch.
-3. **PDF via base64**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files up to 5 MiB use native document input. Larger PDFs use local pypdf extraction of every page, without image pixels or OCR.
+3. **Legacy PDF mode**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files up to 5 MiB use native document input. Larger PDFs use local pypdf extraction of every page, without image pixels or OCR.
 4. **Concurrency**: `asyncio.Semaphore` controls parallel LLM calls (`max_concurrent_llm` for analysis, `max_concurrent_pdf` for DeepResearch).
 5. **Fail-safe**: Every LLM stage has fallback — parse failures default to `peripheral`, analysis failures use defaults, DeepResearch only falls back to abstract input when require_pdf is false; strict failures produce a partial report.
 
@@ -47,7 +47,9 @@ src/                        # Python package, run via: python -m src.main
   llm_client.py             # OpenRouter API wrapper (retry, backoff, error handling)
   relevance_filter.py       # Batch LLM classification with few-shot examples
   deep_analysis.py          # Per-paper structured analysis (scores, tags, affiliations)
-  deep_research.py          # Per-paper 3-module scholarly analysis (with PDF support)
+  deep_research.py          # LaTeX+images first, complete PDF-page fallback, input manifests
+  latex_source.py           # Versioned source download and conservative static include/image parsing
+  figure_input.py           # Raster and all-page PDF figure conversion with pixel limits
   pdf_downloader.py         # Async PDF download from arXiv
   report_generator.py       # Markdown/email rendering and report persistence
   html_report.py             # Offline daily HTML with sanitized Markdown and MathML
@@ -194,3 +196,7 @@ All in `requirements.txt` — keep this list minimal:
 | `pyyaml`     | YAML config loading                        |
 
 Do NOT add new dependencies without strong justification. Standard library (`asyncio`, `json`, `base64`, `smtplib`, `logging`, `subprocess`, `pathlib`) is preferred.
+
+## LaTeX input contract
+
+Full pipeline runs default to paper_input.prefer_latex=true. All resolved source images are sent with document text and captions; unknown or missing source content triggers PDF-page fallback. Do not replace missing images with captions, truncate oversized payloads, or reuse PDFs from another version. Paper input manifests are separate from budget ledgers and must never contain credentials. Images require a verified model image policy, per-image fee reservation and provider price cap. Tests for parser, rendering and multimodal pipeline are targeted; do not run unrelated test suites.
