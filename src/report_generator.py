@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+import json
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -126,11 +127,58 @@ def save_html_report(content: str, date_str: str, data_dir: Path | None = None) 
     if date_str >= newest:
         targets.append(reports_dir / "latest.html")
     for target in targets:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=reports_dir, delete=False) as file:
-            file.write(content)
-            temporary = file.name
-        os.replace(temporary, target)
+        _write_html(target, content)
     logger.info("HTML report saved: %s", path)
+    return path
+
+
+def _write_html(path: Path, content: str) -> None:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as file:
+        file.write(content)
+        temporary = file.name
+    os.replace(temporary, path)
+
+
+def save_report_index(data_dir: Path | None = None) -> Path:
+    """Build a static reading index from saved reports, without exposing run ledgers."""
+    data_dir = data_dir if data_dir is not None else DATA_DIR
+    reports_dir = data_dir / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    labels = {
+        "completed": "已经完成", "partial": "部分完成", "budget_exhausted": "预算停止",
+        "no_candidates": "未抓取到候选论文", "no_relevant_papers": "没有相关论文",
+        "already_indexed": "候选论文已收录",
+    }
+    items = []
+    for path in sorted(reports_dir.glob("????-??-??.html"), reverse=True):
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            if datetime.strptime(path.stem, "%Y-%m-%d").strftime("%Y-%m-%d") != path.stem:
+                continue
+        except ValueError:
+            continue
+        try:
+            summary = json.loads((data_dir / "run-metadata" / f"{path.stem}.json").read_text(encoding="utf-8"))
+            if not isinstance(summary, dict):
+                summary = {}
+        except (OSError, ValueError):
+            summary = {}
+        # Older completed backfills used pdf_research_completed for this count.
+        analyzed = summary.get("analyzed")
+        deep_completed = summary.get("deep_research_completed", summary.get("pdf_research_completed"))
+        items.append({"date": path.stem, "url": path.name,
+                      "status_label": labels.get(summary.get("status"), "缺少运行记录"),
+                      "analyzed": analyzed if type(analyzed) is int and analyzed >= 0 else None,
+                      "deep_completed": deep_completed if type(deep_completed) is int and deep_completed >= 0 else None})
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+    content = env.get_template("report_index.html.j2").render(
+        items=items, latest=items[0]["url"] if items else None,
+        latest_with_papers=next((item["url"] for item in items if item["analyzed"]), None),
+        generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    )
+    path = reports_dir / "index.html"
+    _write_html(path, content)
     return path
 
 

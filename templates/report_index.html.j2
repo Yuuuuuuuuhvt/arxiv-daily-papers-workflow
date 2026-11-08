@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arXiv论文日报</title>
+<style>
+{% raw %}
+:root{color-scheme:light}
+*{box-sizing:border-box}
+html{scroll-behavior:auto}
+body{margin:0;background:#fafaf7;color:#202b36;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;overflow-wrap:anywhere}
+a{color:#236a9c}
+main{max-width:1280px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:0 0 6px;font-size:22px;line-height:1.25}
+h2{margin:0 0 8px;font-size:18px;line-height:1.25}
+section{margin-top:24px}
+p{margin:0 0 8px}
+.note{color:#526172;font-size:12px}
+:focus-visible{outline:2px solid #236a9c;outline-offset:2px}
+.entries{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:16px}
+.entry{display:inline-block;border:1px solid #202b36;border-radius:6px;padding:6px 10px;background:#202b36;color:#fff;text-decoration:none}
+.entry:hover{background:#2f3d4b}
+.entry:focus-visible{outline-color:#236a9c}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start;list-style:none;margin:0;padding:0}
+.card{display:block;border:1px solid #d5dbe2;border-radius:8px;background:#fff;padding:12px;color:inherit;text-decoration:none}
+.card:hover{background:#f1f5f7}
+.card-date{display:block;font-size:18px;font-weight:650;line-height:1.25;color:#236a9c;font-variant-numeric:tabular-nums}
+.card-status{display:block;margin:2px 0 8px;font-weight:650}
+.card dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 12px}
+.card dt{color:#526172;font-size:12px;align-self:center}
+.card dd{margin:0;font-variant-numeric:tabular-nums}
+.missing{color:#805615}
+.empty{color:#526172;background:#fff;border:1px solid #d5dbe2;border-radius:8px;padding:12px}
+@media (max-width:820px){
+ .entries{flex-direction:column;align-items:flex-start}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+{% endraw %}
+</style></head><body><main>
+<header>
+<h1>arXiv论文日报</h1>
+<p class="note">按日报日期归档，具体论文范围见各日报。更新时间 {{ generated_at }}。</p>
+{% set show_both = latest and latest_with_papers and latest != latest_with_papers %}
+{% if latest or latest_with_papers %}<nav class="entries" aria-label="日报入口">
+{% if show_both %}<a class="entry" href="{{ latest }}">最新日报</a>
+<a class="entry" href="{{ latest_with_papers }}">最近有论文的日报</a>
+{% else %}<a class="entry" href="{{ latest or latest_with_papers }}">{{ "最新日报" if latest else "最近有论文的日报" }}</a>
+{% endif %}</nav>
+{% if show_both %}<p class="note" style="margin-top:6px">最新日报当天可能没有论文，历史日报仍保留在下方列表中。</p>{% endif %}
+{% endif %}
+</header>
+<section aria-labelledby="list-title">
+<h2 id="list-title">全部日报</h2>
+{% if items %}<p class="note">共 {{ items|length }} 天，按日期从新到旧排列。</p>
+<ul class="cards">
+{% for item in items %}<li><a class="card" href="{{ item.url }}">
+<span class="card-date">{{ item.date }}</span>
+<span class="card-status">{{ item.status_label }}</span>
+<dl>
+<dt>完成分析</dt><dd>{% if item.analyzed is none %}<span class="missing">缺少运行记录</span>{% else %}{{ item.analyzed }} 篇{% endif %}</dd>
+<dt>全文解读</dt><dd>{% if item.deep_completed is none %}<span class="missing">缺少运行记录</span>{% else %}{{ item.deep_completed }} 篇{% endif %}</dd>
+</dl>
+</a></li>
+{% endfor %}</ul>
+{% else %}<p class="empty">目前没有已生成的日报。</p>
+{% endif %}
+</section>
+</main></body></html>

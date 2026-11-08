@@ -89,3 +89,27 @@ def test_run_status_counts_and_budget_visibility():
     page = generate_html_report(state, modern)
     assert "<dt>完成扩展解读</dt><dd>3</dd>" in page and "仅摘要输入 2 篇" in page
     assert "<dt>跳过扩展解读</dt><dd>否</dd>" in page
+
+
+def test_report_index_preserves_empty_days_and_recent_papers(tmp_path):
+    from src.report_generator import save_report_index
+    reports = tmp_path / 'reports'
+    metadata = tmp_path / 'run-metadata'
+    reports.mkdir()
+    metadata.mkdir()
+    for day, summary in [('2026-11-04', {'status':'completed', 'analyzed':108, 'pdf_research_completed':97}),
+                         ('2026-11-05', {'status':'completed', 'analyzed':121, 'deep_research_completed':104}),
+                         ('2026-11-06', {'status':'no_candidates', 'analyzed':0, 'deep_research_completed':0}),
+                         ('2026-11-07', {})]:
+        (reports / f'{day}.html').write_text('<html>saved</html>')
+        (metadata / f'{day}.json').write_text(json.dumps(summary))
+    (reports/'latest.html').write_text('keep existing latest report')
+    (reports/'2026-99-99.html').write_text('invalid date')
+    (reports/'2026-11-08.html').symlink_to(metadata/'2026-11-05.json')
+    page=save_report_index(tmp_path).read_text()
+    assert 'href="2026-99-99.html"' not in page and 'href="2026-11-08.html"' not in page
+    assert '未抓取到候选论文' in page and '缺少运行记录' in page
+    assert '2026-11-05.html' in page and '2026-11-07.html' in page
+    assert '97' in page and '104' in page
+    assert (reports/'latest.html').read_text()=='keep existing latest report'
+    assert 'budget' not in page and 'requests' not in page

@@ -48,6 +48,7 @@ With the commands above, trial results are stored under `storage/data/trial`. A 
 
 | Path | Content |
 | --- | --- |
+| `reports/index.html` | Browser entry point with latest and historical reports |
 | `reports/YYYY-MM-DD.html` | Offline reading page with formulas, search and direction filters |
 | `reports/latest.html` | Latest dated HTML report; historical backfills do not replace it |
 | `reports/YYYY-MM-DD.md` | Markdown report |

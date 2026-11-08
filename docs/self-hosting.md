@@ -88,3 +88,13 @@ To choose another schedule, create a user timer override with `systemctl --user 
 Install the updated requirements into the service environment. Pillow decodes raster figures and pypdfium2 renders every PDF figure page without a TeX installation. The default `paper_input.prefer_latex: true` fetches versioned source packages, follows supported body includes, and sends the resolved image files with source references and captions. Source archives and rendered images stay under `<PAPERS_DATA_DIR>/paper-inputs`; the `inputs` subdirectory records what was actually prepared and sent. Inspect `latex_image_count` and `pdf_page_image_count` in daily metadata to distinguish source-based input from PDF-page fallback. These are paper counts, not individual image counts.
 
 The parser does not execute TeX. Unsupported source syntax, unresolved image paths or missing source packages trigger complete PDF-page input. Excessive file size, pixel counts or request size fail explicitly; they never silently select only the first images or pages. Keep space for source and rendered-image caches when backing up the data directory. Old PDF caches without a version and hash sidecar are downloaded again before they can be trusted as a fallback.
+
+# 7. Browser access
+
+Each saved run summary rebuilds `<PAPERS_DATA_DIR>/reports/index.html` from the dated HTML reports. The index links to the newest report, the most recent report containing papers, and the full date archive. Empty days and partial runs retain their recorded status. For an existing installation, generate the first index without collecting papers or calling a model:
+
+```bash
+PAPERS_DATA_DIR=/var/lib/arxiv-daily-papers .venv/bin/python -c 'from src.report_generator import save_report_index; save_report_index()'
+```
+
+Point your existing static web server at the `reports` directory only. The self-contained report pages need no API backend. Keep the parent data directory, run metadata, model inputs, configuration and credentials outside the served root. In the server configuration, use a URL prefix ending in `/` so relative report links resolve correctly. The index updates on the next completed or partial run; reload the browser to see new dates. Network reachability and any desired authentication belong to the chosen web server.

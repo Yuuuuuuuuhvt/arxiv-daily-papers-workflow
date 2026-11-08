@@ -31,6 +31,7 @@ from .report_generator import (
     generate_email_html,
     save_report,
     save_html_report,
+    save_report_index,
 )
 
 
@@ -57,6 +58,7 @@ def save_run_summary(date_str: str, summary: dict, data_dir: Path | None = None)
     directory = (data_dir if data_dir is not None else DATA_DIR) / "run-metadata"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / f"{date_str}.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    save_report_index(directory.parent)
 
 
 def save_empty_run(date_str: str, status: str, config: dict, summary: dict, data_dir: Path | None = None) -> None:
