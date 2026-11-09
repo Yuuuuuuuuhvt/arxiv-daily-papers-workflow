@@ -107,6 +107,7 @@ def test_trial_writes_real_report_and_index_without_external_side_effects(monkey
 
 
 def test_unwritable_output_fails_before_collection(monkeypatch, tmp_path):
+    original_temporary_file = main.tempfile.TemporaryFile
     monkeypatch.setattr(main, "setup_logging", lambda: None)
     monkeypatch.setattr(main, "DATA_DIR", tmp_path / "output")
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
@@ -118,6 +119,17 @@ def test_unwritable_output_fails_before_collection(monkeypatch, tmp_path):
         raise AssertionError("Storage must be writable before collection")
     monkeypatch.setattr(main.tempfile, "TemporaryFile", denied)
     monkeypatch.setattr(main, "hybrid_fetch", unexpected)
+    with pytest.raises(SystemExit) as error:
+        asyncio.run(main.run_pipeline(quick_start=True))
+    assert error.value.code == 2
+
+    monkeypatch.setenv("PAPERS_WEB_REPORTS", "1")
+    def deny_details(*args, **kwargs):
+        if kwargs["dir"].name == "papers":
+            raise PermissionError("Paper detail directory is read-only")
+        return original_temporary_file(*args, **kwargs)
+    monkeypatch.setattr(main.tempfile, "TemporaryFile", deny_details)
+    monkeypatch.setattr(main, "_load_run_budget", unexpected)
     with pytest.raises(SystemExit) as error:
         asyncio.run(main.run_pipeline(quick_start=True))
     assert error.value.code == 2

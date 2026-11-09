@@ -199,6 +199,8 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
     index_path = data_dir / "papers_index.json"
     try:
         directories = [data_dir, data_dir / "reports", data_dir / "run-metadata"]
+        if os.environ.get("PAPERS_WEB_REPORTS", "").strip() == "1":
+            directories.append(data_dir / "reports" / "papers")
         if pdf_dir is not None:
             directories.append(pdf_dir)
         for directory in directories:
