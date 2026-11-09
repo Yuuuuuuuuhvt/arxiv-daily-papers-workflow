@@ -89,6 +89,9 @@ def test_run_status_counts_and_budget_visibility():
     page = generate_html_report(state, modern)
     assert "<dt>完成扩展解读</dt><dd>3</dd>" in page and "仅摘要输入 2 篇" in page
     assert "<dt>跳过扩展解读</dt><dd>否</dd>" in page
+    announcement = generate_html_report(state, {**modern, "query_mode": "announced-rss"})
+    assert "最新 arXiv 公告" in announcement
+    assert "论文按 arXiv 首次提交的 UTC 日期归入" not in announcement
 
 
 def test_report_index_preserves_empty_days_and_recent_papers(tmp_path):

@@ -81,7 +81,8 @@ math :is(msub,msup,msubsup,munder,mover,munderover,mroot,mmultiscripts)>:not(:fi
 </style></head><body><main>
 <header>
 <h1>{{ date }} 论文日报</h1>
-{% if query_mode == "hybrid-current" %}<p class="note">本日报汇总 {{ date }} 抓取到的新论文，论文的首次提交日期可能不同。页面中的时间均为 UTC。</p>
+{% if query_mode == "announced-rss" %}<p class="note">本日报汇总 {{ date }} 采集的最新 arXiv 公告，论文的首次提交日期可能不同。页面中的时间均为 UTC。</p>
+{% elif query_mode == "hybrid-current" %}<p class="note">本日报汇总 {{ date }} 抓取到的新论文，论文的首次提交日期可能不同。页面中的时间均为 UTC。</p>
 {% else %}<p class="note">论文按 arXiv 首次提交的 UTC 日期归入 {{ date }}，页面中的时间均为 UTC。</p>{% endif %}
 </header>
 <section aria-labelledby="progress-title">
