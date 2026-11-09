@@ -161,10 +161,13 @@ research_directions:
 
   scene_reconstruction:
     title_keywords:
+      - "3DGS"
+      - "4DGS"
       - "Gaussian splatting"
       - "3D Gaussian"
       - "4D Gaussian"
       - "neural radiance field"
+      - "neural radiance fields"
       - "NeRF"
       - "novel view synthesis"
       - "scene reconstruction"
@@ -173,9 +176,13 @@ research_directions:
       - "simulation-ready"
       - "3D scene generation"
       - "3D scene editing"
+      - "3D scene optimization"
     abstract_keywords:
+      - "3DGS"
+      - "4DGS"
       - "Gaussian splatting"
       - "neural radiance field"
+      - "neural radiance fields"
       - "novel view synthesis"
       - "simulation-ready asset"
       - "mesh reconstruction"
