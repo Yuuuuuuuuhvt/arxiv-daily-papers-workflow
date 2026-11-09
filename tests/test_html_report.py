@@ -40,7 +40,7 @@ def test_markdown_math_lists_and_cjk_bold():
     assert "$5 和 $10" in prices and "<mo>→</mo>" in prices.replace("&#8594;", "→")
 
 
-def test_code_and_untrusted_content_are_inert():
+def test_code_and_untrusted_content_are_inert(monkeypatch):
     source = (
         "```python\nif x < 0: print(\"$x_1$\", \"<tag>\")\n```\n\n"
         "`$x_1$` <script>alert(1)</script> <img src=\"https://invalid.test/x\" onerror=\"alert(1)\">\n"
@@ -52,6 +52,9 @@ def test_code_and_untrusted_content_are_inert():
     assert not {"script", "img", "iframe", "style"} & set(parser.tags)
     assert not any(k.startswith("on") or k == "style" for k, _ in parser.attributes)
     assert all(v.startswith(("http://", "https://", "#")) for k, v in parser.attributes if k == "href")
+    links = render_markdown('[原文](https://example.test/paper) [章节](#method)')
+    assert 'href="https://example.test/paper" target="_blank" rel="noopener noreferrer"' in links
+    assert 'href="#method" target=' not in links
 
     state = {
         "date": "2026-01-02",
@@ -60,7 +63,9 @@ def test_code_and_untrusted_content_are_inert():
         "core_ids": ["0000.00001"], "peripheral_ids": [], "analyses": {}, "deep_research_reports": {},
         "editorial_notes": {"0000.00001": "</script>"},
     }
+    monkeypatch.setenv("PAPERS_FAVICON_URL", "icons/paper.gif?v=1")
     page = generate_html_report(state, {"status": "completed"})
+    assert '<link rel="icon" href="icons/paper.gif?v=1">' in page
     assert page.count("</script>") == 2  # 只有模板自带的两个脚本结束标签
     assert "\u2028" not in page
     paper = embedded_papers(page)[0]
@@ -96,23 +101,47 @@ def test_run_status_counts_and_budget_visibility():
 
 def test_report_index_preserves_empty_days_and_recent_papers(tmp_path):
     from src.report_generator import save_report_index
-    reports = tmp_path / 'reports'
-    metadata = tmp_path / 'run-metadata'
-    reports.mkdir()
-    metadata.mkdir()
-    for day, summary in [('2026-11-04', {'status':'completed', 'analyzed':108, 'pdf_research_completed':97}),
-                         ('2026-11-05', {'status':'completed', 'analyzed':121, 'deep_research_completed':104}),
-                         ('2026-11-06', {'status':'no_candidates', 'analyzed':0, 'deep_research_completed':0}),
-                         ('2026-11-07', {})]:
-        (reports / f'{day}.html').write_text('<html>saved</html>')
-        (metadata / f'{day}.json').write_text(json.dumps(summary))
-    (reports/'latest.html').write_text('keep existing latest report')
-    (reports/'2026-99-99.html').write_text('invalid date')
-    (reports/'2026-11-08.html').symlink_to(metadata/'2026-11-05.json')
-    page=save_report_index(tmp_path).read_text()
-    assert 'href="2026-99-99.html"' not in page and 'href="2026-11-08.html"' not in page
+
+    def write_days(root, days):
+        reports, metadata = root / 'reports', root / 'run-metadata'
+        reports.mkdir(parents=True)
+        metadata.mkdir()
+        for day, summary in days.items():
+            (reports / f'{day}.html').write_text(f'<html>report {day}</html>')
+            (metadata / f'{day}.json').write_text(json.dumps(summary))
+        return reports, metadata
+
+    reports, metadata = write_days(tmp_path, {
+        '2026-10-18': {'status': 'budget_exhausted', 'analyzed': 0},   # Sunday, abnormal
+        '2026-10-24': {},                                              # Saturday, no run record
+        '2026-10-25': {'status': 'completed', 'analyzed': 3},          # Sunday with papers
+        '2026-10-31': {'status': 'partial', 'analyzed': 0},            # Saturday, abnormal
+        '2026-11-01': {'status': 'running', 'analyzed': 0},            # Sunday, abnormal
+        '2026-11-04': {'status': 'completed', 'analyzed': 108, 'pdf_research_completed': 97},
+        '2026-11-05': {'status': 'completed', 'analyzed': 121, 'deep_research_completed': 104},
+        '2026-11-06': {'status': 'no_candidates', 'analyzed': 0, 'deep_research_completed': 0},  # weekday
+        '2026-11-07': {'status': 'no_candidates', 'analyzed': 0},      # Saturday, confirmed empty
+        '2026-11-08': {'status': 'already_indexed', 'analyzed': 0},    # Sunday, confirmed empty
+    })
+    (reports / 'latest.html').write_text('stale latest report')
+    (reports / '2026-99-99.html').write_text('invalid date')
+    (reports / '2026-11-14.html').symlink_to(metadata / '2026-11-05.json')
+    page = save_report_index(tmp_path).read_text()
+    for hidden in ('2026-99-99', '2026-11-14', '2026-11-07', '2026-11-08'):
+        assert f'href="{hidden}.html"' not in page
+    for shown in ('2026-10-18', '2026-10-24', '2026-10-25', '2026-10-31', '2026-11-01', '2026-11-04', '2026-11-06'):
+        assert f'href="{shown}.html"' in page
     assert '未抓取到候选论文' in page and '缺少运行记录' in page
-    assert '2026-11-05.html' in page and '2026-11-07.html' in page
     assert '97' in page and '104' in page
-    assert (reports/'latest.html').read_text()=='keep existing latest report'
     assert 'budget' not in page and 'requests' not in page
+    # The main entry is the newest report with papers; the newest visible date is the secondary entry.
+    assert 'class="entry" href="2026-11-05.html"' in page
+    assert 'class="entry-secondary" href="2026-11-06.html"' in page
+    assert (reports / '2026-11-08.html').read_text() == '<html>report 2026-11-08</html>'
+    assert (reports / 'latest.html').read_text() == '<html>report 2026-11-06</html>'
+
+    empty_root = tmp_path / 'empty'
+    reports, _ = write_days(empty_root, {'2026-11-07': {'status': 'no_relevant_papers', 'analyzed': 0}})
+    index = save_report_index(empty_root).read_text()
+    assert 'href="2026-11-07.html"' not in index
+    assert (reports / 'latest.html').read_text() == index

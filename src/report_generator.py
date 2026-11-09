@@ -140,6 +140,9 @@ def _write_html(path: Path, content: str) -> None:
     os.replace(temporary, path)
 
 
+CONFIRMED_EMPTY_STATUSES = {"no_candidates", "no_relevant_papers", "already_indexed", "completed"}
+
+
 def save_report_index(data_dir: Path | None = None) -> Path:
     """Build a static reading index from saved reports, without exposing run ledgers."""
     data_dir = data_dir if data_dir is not None else DATA_DIR
@@ -149,6 +152,7 @@ def save_report_index(data_dir: Path | None = None) -> Path:
         "completed": "已经完成", "partial": "部分完成", "budget_exhausted": "预算停止",
         "no_candidates": "未抓取到候选论文", "no_relevant_papers": "没有相关论文",
         "already_indexed": "候选论文已收录",
+        "running": "正在运行", "failed": "运行失败", "pdf_incomplete": "全文解读未完成",
     }
     items = []
     for path in sorted(reports_dir.glob("????-??-??.html"), reverse=True):
@@ -167,6 +171,11 @@ def save_report_index(data_dir: Path | None = None) -> Path:
             summary = {}
         # Older completed backfills used pdf_research_completed for this count.
         analyzed = summary.get("analyzed")
+        # Only a confirmed empty weekend is hidden. A missing, failed, partial or running record
+        # may still hide papers, so those days stay visible. The files themselves are never deleted.
+        if (datetime.strptime(path.stem, "%Y-%m-%d").weekday() >= 5 and type(analyzed) is int and analyzed == 0
+                and summary.get("status") in CONFIRMED_EMPTY_STATUSES):
+            continue
         deep_completed = summary.get("deep_research_completed", summary.get("pdf_research_completed"))
         items.append({"date": path.stem, "url": path.name,
                       "status_label": labels.get(summary.get("status"), "缺少运行记录"),
@@ -174,10 +183,15 @@ def save_report_index(data_dir: Path | None = None) -> Path:
                       "deep_completed": deep_completed if type(deep_completed) is int and deep_completed >= 0 else None})
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
     content = env.get_template("report_index.html.j2").render(
-        items=items, latest=items[0]["url"] if items else None,
-        latest_with_papers=next((item["url"] for item in items if item["analyzed"]), None),
+        favicon_url=os.environ.get("PAPERS_FAVICON_URL", ""),
+        items=items, latest=items[0] if items else None,
+        latest_with_papers=next((item for item in items if item["analyzed"]), None),
         generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     )
+    # save_html_report points latest.html at the newest date even when that date is a hidden empty
+    # weekend, so the stable entry is re-synced here to the newest visible report, or to this index.
+    _write_html(reports_dir / "latest.html",
+                (reports_dir / items[0]["url"]).read_text(encoding="utf-8") if items else content)
     path = reports_dir / "index.html"
     _write_html(path, content)
     return path

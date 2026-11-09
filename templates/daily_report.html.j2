@@ -2,6 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ date }} 论文日报</title>
+{% if favicon_url %}<link rel="icon" href="{{ favicon_url }}">{% endif %}
 <style>
 {% raw %}
 :root{color-scheme:light}
@@ -9,7 +10,16 @@
 html{scroll-behavior:auto}
 body{margin:0;background:#fafaf7;color:#202b36;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;overflow-wrap:anywhere}
 a{color:#236a9c}
-main{max-width:1280px;margin:0 auto;padding:20px 16px 40px}
+main{max-width:1600px;margin:0 auto;padding:0 16px 64px}
+[hidden]{display:none!important}
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;padding:10px 0;background:#fafaf7;border-bottom:.5px solid #d5dbe2;margin-bottom:20px}
+.breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;min-width:0}
+.breadcrumbs a{text-decoration:none}
+.breadcrumbs span{color:#526172;font-size:12px}
+.reader-actions{display:flex;gap:6px;flex-wrap:wrap}
+.back-top{position:fixed;right:16px;bottom:16px;z-index:11;background:#202b36;color:#fff;border-color:#202b36}
+.back-top:hover{background:#2f3d4b}
+#page-title,#paper-index,.reader :is(h1,h2,h3,h4,h5,h6){scroll-margin-top:calc(var(--nav-height,56px) + 16px)}
 h1{margin:0 0 6px;font-size:22px;line-height:1.25}
 section{margin-top:24px}
 h2{margin:0 0 8px;font-size:18px;line-height:1.25}
@@ -30,8 +40,8 @@ button:hover{background:#f1f5f7}
 button[aria-pressed="true"],button[aria-current="true"]{background:#eaf1f5;border-color:#236a9c}
 input[type=search]{border:1px solid #d5dbe2;border-radius:6px;padding:6px 10px;background:#fff;min-width:220px;flex:1 1 220px;max-width:420px}
 :focus-visible{outline:2px solid #236a9c;outline-offset:2px}
-.layout{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:16px;margin-top:8px;align-items:start}
-.index{border:1px solid #d5dbe2;border-radius:8px;background:#fff;max-height:calc(100vh - 24px);overflow:auto;position:sticky;top:12px}
+.layout{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr) 216px;gap:16px;margin-top:8px;align-items:start}
+.index{border:1px solid #d5dbe2;border-radius:8px;background:#fff;max-height:calc(100vh - var(--nav-height,56px) - 24px);overflow:auto;position:sticky;top:calc(var(--nav-height,56px) + 12px)}
 .index ul{list-style:none;margin:0;padding:0}
 .index li+li{border-top:.5px solid #d5dbe2}
 .index button{display:block;width:100%;text-align:left;border:0;border-radius:0;padding:8px 10px;background:transparent}
@@ -39,12 +49,21 @@ input[type=search]{border:1px solid #d5dbe2;border-radius:6px;padding:6px 10px;b
 .index button[aria-current="true"]{background:#eaf1f5;box-shadow:inset 0 0 0 2px #236a9c}
 .item-title{display:block;font-weight:650}
 .item-meta{display:block;color:#526172;font-size:12px}
-.reader{border:1px solid #d5dbe2;border-radius:8px;background:#fff;padding:16px;min-width:0}
+.reader{border:1px solid #d5dbe2;border-radius:8px;background:#fff;padding:16px;min-width:0;scroll-margin-top:calc(var(--nav-height,56px) + 16px)}
 .reader:focus{outline:none}
 .reader:focus-visible{outline:2px solid #236a9c;outline-offset:2px}
 .reader dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px}
 .reader dt{color:#526172}
 .reader dd{margin:0}
+.toc{position:sticky;top:calc(var(--nav-height,56px) + 12px);min-width:0;padding:6px 0}
+.toc h2{font-size:14px;margin-bottom:10px}
+.toc ol{list-style:none;margin:0;padding:0;max-height:calc(100vh - var(--nav-height,56px) - 100px);overflow:auto}
+.toc a{display:block;text-decoration:none;color:#526172;font-size:12px;line-height:1.5;padding:5px 8px;border-radius:6px}
+.toc a:hover{background:#f1f5f7}
+.toc a[aria-current="location"]{background:#eaf1f5;color:#236a9c;font-weight:650}
+.toc [data-depth="1"]{padding-left:20px}
+.toc [data-depth="2"]{padding-left:32px}
+#toc-toggle{display:none}
 .links{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0}
 .status{color:#805615;background:#fff7df;padding:6px 10px;border-radius:6px}
 .prewrap{white-space:pre-line}
@@ -70,17 +89,40 @@ math :is(msub,msup,msubsup,munder,mover,munderover,mroot,mmultiscripts)>:not(:fi
 .fulltext pre{overflow-x:auto;background:#f1f5f7;border-radius:6px;padding:8px 10px;font-size:12px}
 .fulltext code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
 .empty{color:#526172;padding:12px 10px}
+@media (max-width:1100px){
+ .layout{grid-template-columns:minmax(200px,260px) minmax(0,1fr)}
+ .index{grid-column:1;grid-row:1 / span 2}
+ .toc{grid-column:2;grid-row:1;position:static}
+ .toc ol{max-height:220px}
+ .reader{grid-column:2;grid-row:2}
+}
 @media (max-width:820px){
  .layout{grid-template-columns:minmax(0,1fr)}
- .index{position:static;max-height:50vh}
+ .index{position:static;max-height:36vh;grid-column:1;grid-row:1}
+ .toc{grid-column:1;grid-row:2;border-top:.5px solid #d5dbe2;border-bottom:.5px solid #d5dbe2;padding:8px 0}
+ .toc h2{display:none}
+ #toc-toggle{display:block}
+ .toc[data-collapsed="true"] ol{display:none}
+ .toc ol{max-height:40vh;margin-top:8px}
+ .reader{grid-column:1;grid-row:3}
  .reader dl{grid-template-columns:minmax(0,1fr)}
  .reader dt{margin-top:6px}
+ .topbar{gap:6px;padding:8px 0}
+ .breadcrumbs{gap:4px 8px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 {% endraw %}
-</style></head><body><main>
+</style></head><body><main id="top">
+<div class="topbar" id="topbar">
+<nav class="breadcrumbs" aria-label="页面层级">
+<a href="index.html">日报首页</a><span aria-hidden="true">/</span>
+<a href="#paper-index" id="day-link">{{ date }}</a>
+<span id="paper-crumb" aria-current="page" hidden></span>
+</nav>
+{% if has_papers %}<div class="reader-actions"><button type="button" id="back-list">返回论文列表</button></div>{% endif %}
+</div>
 <header>
-<h1>{{ date }} 论文日报</h1>
+<h1 id="page-title" tabindex="-1">{{ date }} 论文日报</h1>
 {% if query_mode == "announced-rss" %}<p class="note">本日报汇总 {{ date }} 采集的最新 arXiv 公告，论文的首次提交日期可能不同。页面中的时间均为 UTC。</p>
 {% elif query_mode == "hybrid-current" %}<p class="note">本日报汇总 {{ date }} 抓取到的新论文，论文的首次提交日期可能不同。页面中的时间均为 UTC。</p>
 {% else %}<p class="note">论文按 arXiv 首次提交的 UTC 日期归入 {{ date }}，页面中的时间均为 UTC。</p>{% endif %}
@@ -99,7 +141,7 @@ math :is(msub,msup,msubsup,munder,mover,munderover,mroot,mmultiscripts)>:not(:fi
 {% endfor %}</dl>
 </div>{% endif %}
 </section>
-{% if has_papers %}<section aria-labelledby="index-title">
+{% if has_papers %}<section aria-labelledby="index-title" id="paper-index" tabindex="-1">
 <h2 id="index-title">论文索引</h2>
 <div class="controls">
 <div class="group" role="group" aria-label="研究方向过滤" id="directions"></div>
@@ -110,11 +152,16 @@ math :is(msub,msup,msubsup,munder,mover,munderover,mroot,mmultiscripts)>:not(:fi
 <div class="layout">
 <nav class="index" aria-label="论文列表"><ul id="list"></ul></nav>
 <article class="reader" id="reader" tabindex="-1" aria-live="polite"><p class="note">请在论文索引中选择一篇论文。</p></article>
+<nav class="toc" id="toc" aria-label="本文目录" data-collapsed="true" hidden>
+<h2>本文目录</h2><button type="button" id="toc-toggle" aria-expanded="false" aria-controls="toc-list">展开本文目录</button>
+<ol id="toc-list"></ol>
+</nav>
 </div>
 </section>
-{% else %}<section><p class="note">本次没有可展示的论文。</p></section>
+{% else %}<section id="paper-index"><p class="note">本次没有可展示的论文。</p></section>
 {% endif %}
 </main>
+<button type="button" class="back-top" id="back-top" hidden>返回顶部</button>
 {% if has_papers %}<script id="data" type="application/json">{{ data_json|safe }}</script>
 <script>
 {% raw %}
@@ -124,10 +171,12 @@ var papers=DATA.papers, directions=DATA.directions, MISSING=DATA.missing;
 var state={direction:"",query:"",selected:null};
 var listEl=document.getElementById("list"), readerEl=document.getElementById("reader");
 var countEl=document.getElementById("count"), dirEl=document.getElementById("directions");
+var tocEl=document.getElementById("toc"),tocList=document.getElementById("toc-list");
+var crumb=document.getElementById("paper-crumb"),headings=[],scrollPending=false;
 function el(tag,text,cls){var e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
 function rich(tag,markup,cls){var e=el(tag,undefined,cls);e.innerHTML=markup;return e}
 function dirName(key){for(var i=0;i<directions.length;i++)if(directions[i][0]===key)return directions[i][1];return key||MISSING}
-function link(href,text){var a=el("a",text);a.href=href;a.rel="noopener noreferrer";return a}
+function link(href,text){var a=el("a",text);a.href=href;a.target="_blank";a.rel="noopener noreferrer";return a}
 function row(dl,name,value){dl.appendChild(el("dt",name));var d=el("dd");if(value&&value.nodeType)d.appendChild(value);else d.textContent=value;dl.appendChild(d)}
 function list(a){return a&&a.length?a.join("，"):MISSING}
 
@@ -135,8 +184,7 @@ function buildFilters(){
   var all=[["","全部"]].concat(directions);
   all.forEach(function(d){
     var b=el("button",d[1]);b.type="button";b.setAttribute("aria-pressed",d[0]===state.direction?"true":"false");
-    b.addEventListener("click",function(){state.direction=d[0];refresh();
-      Array.prototype.forEach.call(dirEl.children,function(c,i){c.setAttribute("aria-pressed",all[i][0]===state.direction?"true":"false")})});
+    b.addEventListener("click",function(){state.direction=d[0];applyFilters()});
     dirEl.appendChild(b);
   });
 }
@@ -155,20 +203,33 @@ function refresh(){
     var score=p.weighted===null||p.weighted===undefined?"评分未记录":"评分 "+p.weighted;
     b.appendChild(el("span",p.id+"，"+p.level+"，"+dirName(p.direction)+"，"+score,"item-meta"));
     if(p.id===state.selected)b.setAttribute("aria-current","true");
-    b.addEventListener("click",function(){select(p.id,true)});
+    b.addEventListener("click",function(){select(p.id,true,"push")});
     li.appendChild(b);listEl.appendChild(li);
   });
   if(!shown.length)listEl.appendChild(el("li","没有符合条件的论文。","empty"));
   countEl.textContent="显示 "+shown.length+" 篇，共 "+papers.length+" 篇。";
+  Array.prototype.forEach.call(dirEl.children,function(b,i){b.setAttribute("aria-pressed",i===0?!state.direction:directions[i-1][0]===state.direction)});
+  return shown;
 }
-function select(id,focus){
+function applyFilters(){
+  var shown=refresh();
+  if(shown.some(function(p){return p.id===state.selected}))return;
+  if(shown.length){select(shown[0].id,false,"replace");return}
+  state.selected=null;headings=[];tocEl.hidden=true;crumb.hidden=true;
+  readerEl.textContent="";readerEl.appendChild(el("p","没有符合条件的论文。","note"));
+  history.replaceState(null,"","#paper-index");
+}
+function select(id,focus,historyMode){
   var p=papers.filter(function(x){return x.id===id})[0];if(!p)return;
+  // Back/forward navigation must show its paper even if a later filter hid it.
+  if(!matches(p)){state.direction="";state.query="";document.getElementById("query").value="";refresh()}
   state.selected=id;
   Array.prototype.forEach.call(listEl.querySelectorAll("button"),function(b){
     if(b.dataset.id===id)b.setAttribute("aria-current","true");else b.removeAttribute("aria-current")});
   render(p);
-  if(history.replaceState)history.replaceState(null,"","#"+id);
-  if(focus){readerEl.focus({preventScroll:true});if(window.matchMedia("(max-width:820px)").matches)readerEl.scrollIntoView({block:"start"})}
+  crumb.hidden=false;crumb.textContent="/ "+p.id;
+  if(historyMode&&historyMode!=="none"&&location.hash!=="#"+id)history[historyMode+"State"](null,"","#"+id);
+  if(focus){readerEl.focus({preventScroll:true});readerEl.scrollIntoView({block:"start"})}
 }
 function render(p){
   readerEl.textContent="";
@@ -215,7 +276,52 @@ function render(p){
   if(p.report_html){var body=el("div");body.innerHTML=p.report_html;ft.appendChild(body)}
   else ft.appendChild(el("p","这篇论文没有扩展解读，上方只有摘要与摘要级分析。","status"));
   readerEl.appendChild(ft);
+  buildContents(p);
   requestAnimationFrame(markScrollableMath);
+}
+function buildContents(p){
+  tocList.textContent="";
+  headings=Array.from(readerEl.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+  headings.forEach(function(heading,i){
+    heading.id=p.id+"/section-"+i;heading.tabIndex=-1;
+    var li=el("li"),a=el("a",i===0?"论文信息":heading.textContent);
+    a.href="#"+heading.id;
+    var nested=heading.closest(".prose")||heading.parentElement.parentElement.classList.contains("fulltext");
+    a.dataset.depth=nested?String(Math.min(2,Math.max(1,Number(heading.tagName.slice(1))-1))):"0";
+    a.addEventListener("click",function(e){
+      e.preventDefault();history.pushState(null,"",a.getAttribute("href"));
+      setContentsOpen(false);jumpToHeading(heading);
+    });
+    li.appendChild(a);tocList.appendChild(li);
+  });
+  tocEl.hidden=false;
+  updateScrollState();
+}
+function setContentsOpen(open){
+  tocEl.dataset.collapsed=String(!open);
+  var toggle=document.getElementById("toc-toggle");toggle.setAttribute("aria-expanded",String(open));
+  toggle.textContent=open?"收起本文目录":"展开本文目录";
+}
+function jumpToHeading(heading){
+  heading.scrollIntoView({block:"start"});heading.focus({preventScroll:true});updateScrollState();
+}
+function updateScrollState(){
+  document.getElementById("back-top").hidden=window.scrollY<300;
+  var offset=document.getElementById("topbar").getBoundingClientRect().height+24,active=0;
+  headings.forEach(function(h,i){if(h.getBoundingClientRect().top<=offset)active=i});
+  tocList.querySelectorAll("a").forEach(function(a,i){
+    if(i===active)a.setAttribute("aria-current","location");else a.removeAttribute("aria-current");
+  });
+}
+function restoreLocation(){
+  var value;try{value=decodeURIComponent(location.hash.slice(1))}catch(e){value=""}
+  var id=value.split("/")[0],paper=papers.find(function(p){return p.id===id});
+  if(paper){
+    if(state.selected!==id)select(id,false,"none");
+    var heading=document.getElementById(value);
+    if(heading)requestAnimationFrame(function(){jumpToHeading(heading)});
+    else readerEl.scrollIntoView({block:'start'});
+  }else if(!state.selected&&papers.length)select(papers[0].id,false,"replace");
 }
 function markScrollableMath(){
   readerEl.querySelectorAll('.math').forEach(function(node){
@@ -223,13 +329,28 @@ function markScrollableMath(){
     else{node.removeAttribute('tabindex');node.removeAttribute('aria-label')}
   });
 }
-window.addEventListener('resize',markScrollableMath);
+function measureNavigation(){document.documentElement.style.setProperty('--nav-height',document.getElementById('topbar').getBoundingClientRect().height+'px');markScrollableMath()}
+window.addEventListener('resize',measureNavigation);
+new ResizeObserver(measureNavigation).observe(document.getElementById('topbar'));
+window.addEventListener('scroll',function(){if(!scrollPending){scrollPending=true;requestAnimationFrame(function(){scrollPending=false;updateScrollState()})}},{passive:true});
+window.addEventListener('popstate',restoreLocation);
+window.addEventListener('hashchange',restoreLocation);
+document.getElementById('toc-toggle').addEventListener('click',function(){setContentsOpen(tocEl.dataset.collapsed==='true')});
+document.getElementById('toc').addEventListener('keydown',function(e){if(e.key==='Escape'){setContentsOpen(false);document.getElementById('toc-toggle').focus()}});
+function returnToList(e){e.preventDefault();document.getElementById('paper-index').scrollIntoView({block:'start'});document.getElementById('query').focus({preventScroll:true})}
+document.getElementById('back-list').addEventListener('click',returnToList);
+document.getElementById('day-link').addEventListener('click',returnToList);
+document.getElementById('back-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'instant'});document.getElementById('page-title').focus({preventScroll:true})});
 buildFilters();
-document.getElementById("query").addEventListener("input",function(e){state.query=e.target.value.trim().toLowerCase();refresh()});
+document.getElementById("query").addEventListener("input",function(e){state.query=e.target.value.trim().toLowerCase();applyFilters()});
 refresh();
-var hash=decodeURIComponent(location.hash.slice(1));
-if(hash)select(hash,false);
+measureNavigation();restoreLocation();
 })();
 {% endraw %}
+</script>{% endif %}
+{% if not has_papers %}<script>
+var backTop=document.getElementById('back-top');
+window.addEventListener('scroll',function(){backTop.hidden=window.scrollY<300},{passive:true});
+backTop.addEventListener('click',function(){window.scrollTo({top:0,behavior:'instant'});document.getElementById('page-title').focus({preventScroll:true})});
 </script>{% endif %}
 </body></html>

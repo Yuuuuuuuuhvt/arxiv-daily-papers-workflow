@@ -2,6 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>arXiv论文日报</title>
+{% if favicon_url %}<link rel="icon" href="{{ favicon_url }}">{% endif %}
 <style>
 {% raw %}
 :root{color-scheme:light}
@@ -18,6 +19,7 @@ p{margin:0 0 8px}
 :focus-visible{outline:2px solid #236a9c;outline-offset:2px}
 .entries{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:16px}
 .entry{display:inline-block;border:1px solid #202b36;border-radius:6px;padding:6px 10px;background:#202b36;color:#fff;text-decoration:none}
+.entry-secondary{align-self:center}
 .entry:hover{background:#2f3d4b}
 .entry:focus-visible{outline-color:#236a9c}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start;list-style:none;margin:0;padding:0}
@@ -39,18 +41,15 @@ p{margin:0 0 8px}
 <header>
 <h1>arXiv论文日报</h1>
 <p class="note">按日报日期归档，具体论文范围见各日报。更新时间 {{ generated_at }}。</p>
-{% set show_both = latest and latest_with_papers and latest != latest_with_papers %}
-{% if latest or latest_with_papers %}<nav class="entries" aria-label="日报入口">
-{% if show_both %}<a class="entry" href="{{ latest }}">最新日报</a>
-<a class="entry" href="{{ latest_with_papers }}">最近有论文的日报</a>
-{% else %}<a class="entry" href="{{ latest or latest_with_papers }}">{{ "最新日报" if latest else "最近有论文的日报" }}</a>
-{% endif %}</nav>
-{% if show_both %}<p class="note" style="margin-top:6px">最新日报当天可能没有论文，历史日报仍保留在下方列表中。</p>{% endif %}
-{% endif %}
+{% set primary = latest_with_papers or latest %}
+{% if primary %}<nav class="entries" aria-label="日报入口">
+<a class="entry" href="{{ primary.url }}">阅读{{ "最近有论文的日报" if latest_with_papers else "最新日报" }} {{ primary.date }}</a>
+{% if latest and latest != primary %}<a class="entry-secondary" href="{{ latest.url }}">最新运行日期 {{ latest.date }}，{{ latest.status_label }}</a>{% endif %}
+</nav>{% endif %}
 </header>
 <section aria-labelledby="list-title">
-<h2 id="list-title">全部日报</h2>
-{% if items %}<p class="note">共 {{ items|length }} 天，按日期从新到旧排列。</p>
+<h2 id="list-title">历史日报</h2>
+{% if items %}<p class="note">共 {{ items|length }} 天，按日期从新到旧排列。周末没有论文的日期不在列表中。</p>
 <ul class="cards">
 {% for item in items %}<li><a class="card" href="{{ item.url }}">
 <span class="card-date">{{ item.date }}</span>

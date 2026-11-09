@@ -100,3 +100,9 @@ PAPERS_DATA_DIR=/var/lib/arxiv-daily-papers .venv/bin/python -c 'from src.report
 ```
 
 Point your existing static web server at the `reports` directory only. The self-contained report pages need no API backend. Keep the parent data directory, run metadata, model inputs, configuration and credentials outside the served root. In the server configuration, use a URL prefix ending in `/` so relative report links resolve correctly. The index updates on the next completed or partial run; reload the browser to see new dates. Network reachability and any desired authentication belong to the chosen web server.
+
+The reader includes a report-home link, a return-to-list action, per-paper section navigation, browser back/forward history, and a back-to-top button. External paper, PDF and source links open in a separate tab. On narrow screens the section list appears above the paper and can be expanded.
+
+The report index hides only confirmed zero-paper weekend runs with a successful empty status. Weekend failures, incomplete runs, missing metadata and reports containing papers stay visible; no archived files are deleted. The main reading link prefers the latest report containing papers, while the latest-run link and `latest.html` use the most recent visible date.
+
+To customize the browser tab icon, place your image beneath the served reports directory and set `PAPERS_FAVICON_URL=icons/favicon.gif?v=1` in the service environment. The value may also be an absolute image URL. Serve the matching image content type. This setting changes generated HTML only; render existing reports from their saved checkpoints to update them without repeating analysis. Keep character artwork and other personal branding in instance storage rather than the shared source checkout.

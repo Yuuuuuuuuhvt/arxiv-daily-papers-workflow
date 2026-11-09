@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 import unicodedata
 from datetime import datetime, timezone
@@ -104,7 +105,9 @@ def _safe_url(value: object) -> str | None:
 
 def _keep_safe_href(match: re.Match[str]) -> str:
     url = html.unescape(match.group(1))
-    return match.group(0) if SAFE_URL.match(url) or url.startswith("#") else 'href="#"'
+    if SAFE_URL.match(url):
+        return match.group(0) + ' target="_blank" rel="noopener noreferrer"'
+    return match.group(0) if url.startswith("#") else 'href="#"'
 
 
 @lru_cache(maxsize=4096)
@@ -312,6 +315,7 @@ def generate_html_report(state: dict, summary: dict) -> str:
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
     return env.get_template("daily_report.html.j2").render(
         date=date,
+        favicon_url=os.environ.get("PAPERS_FAVICON_URL", ""),
         query_mode=summary.get("query_mode", "submitted-date-utc"),
         status_text=STATUS_TEXT.get(summary.get("status"), "运行状态未记录。"),
         input_modes=_input_modes(summary),
