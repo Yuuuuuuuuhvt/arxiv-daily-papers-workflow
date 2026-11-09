@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI 与 VLA、World Models、Autonomous Driving、Agentic AI 和 Robotics 五个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
+全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI 与 VLA、World Models、Autonomous Driving、Agentic AI、Robotics 和 3DGS / 三维重建与仿真场景六个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
 
 - **技术栈**: Python 3.11+, asyncio, httpx, Jinja2, PyYAML, feedparser, arxiv
 - **LLM 网关**: OpenRouter (openrouter.ai) — 所有 LLM 调用经此路由
@@ -27,7 +27,7 @@ Data flow:
 
 ### Key Design Decisions
 
-1. **Hybrid fetch**: API (keyword search) + RSS (announce type metadata) combined. RSS provides `new`/`replace`/`cross` classification; API provides deep keyword matching.
+1. **Hybrid fetch**: Current daily collection uses RSS new/cross announcements, local category and keyword matching, then API metadata lookup for every selected ID. Explicit REPORT_DATE uses historical UTC submission-date API search.
 2. **3-tier relevance**: `core` means a direct contribution to a tracked direction; `peripheral` means supporting context or an indirect connection; `not_relevant` means outside scope. Agentic and Robotics papers do not need a foundation model to qualify as core. Only core papers get DeepResearch.
 3. **Legacy PDF mode**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files up to 5 MiB use native document input. Larger PDFs use local pypdf extraction of every page, without image pixels or OCR.
 4. **Concurrency**: `asyncio.Semaphore` controls parallel LLM calls (`max_concurrent_llm` for analysis, `max_concurrent_pdf` for DeepResearch).

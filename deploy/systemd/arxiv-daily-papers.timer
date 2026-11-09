@@ -2,8 +2,8 @@
 Description=Run the arXiv paper report on weekdays
 
 [Timer]
-OnCalendar=Mon..Fri *-*-* 05:30:00 UTC
-Persistent=true
+OnCalendar=Mon..Fri *-*-* 08:00:00 America/New_York
+Persistent=false
 Unit=arxiv-daily-papers.service
 
 [Install]

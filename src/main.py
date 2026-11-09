@@ -184,14 +184,14 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
     date_str = report_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     # A timer catch-up or manual duplicate must not create a second paid run.
     summary_path = data_dir / "run-metadata" / f"{date_str}.json"
-    if not quick_start and os.environ.get("PAPERS_DATE_MODE") == "previous-day" and summary_path.is_file():
+    if not quick_start and summary_path.is_file():
         previous = json.loads(summary_path.read_text(encoding="utf-8"))
         if previous.get("status") in {"completed", "no_candidates", "no_relevant_papers", "already_indexed"} and all(
             (data_dir / "reports" / f"{date_str}.{suffix}").is_file() for suffix in ("md", "html")
         ):
             logger.info("Daily report for %s already completed; no requests made", date_str)
             return
-    summary = {"date": date_str, "query_mode": "submitted-date-utc" if report_date else "hybrid-current", "email_sent": False}
+    summary = {"date": date_str, "query_mode": "submitted-date-utc" if report_date else "announced-rss", "email_sent": False}
     pdf_config = config.get("pdf", {})
     pdf_dir = None
     if not quick_start and pdf_config.get("download_enabled", False):

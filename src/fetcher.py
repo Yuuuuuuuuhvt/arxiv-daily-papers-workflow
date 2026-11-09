@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from html import unescape
 
 import arxiv
 import feedparser
+import httpx
 
 from .models import ArxivPaper
 
@@ -190,7 +192,11 @@ def fetch_rss(config: dict) -> tuple[dict[str, ArxivPaper], dict[str, dict]]:
     url = f"https://rss.arxiv.org/rss/{categories}"
     logger.info("Fetching RSS: %s", url)
 
-    feed = feedparser.parse(url)
+    response = httpx.get(url, timeout=60, follow_redirects=True)
+    response.raise_for_status()
+    feed = feedparser.parse(response.content)
+    if feed.bozo or not feed.version:
+        raise ValueError("arXiv RSS is not a valid feed; refusing to report an empty day")
     papers: dict[str, ArxivPaper] = {}
     metadata: dict[str, dict] = {}
 
@@ -206,45 +212,60 @@ def fetch_rss(config: dict) -> tuple[dict[str, ArxivPaper], dict[str, dict]]:
     return papers, metadata
 
 
+def _matches_direction(paper: ArxivPaper, direction: dict) -> bool:
+    """Match configured phrases against an announcement before model filtering."""
+    def normalized(text: str) -> str:
+        return " " + re.sub(r"[\W_]+", " ", unescape(text).casefold()).strip() + " "
+
+    categories = direction.get("categories", [])
+    if categories and not set(categories).intersection(paper.categories):
+        return False
+    title, abstract = normalized(paper.title), normalized(paper.abstract)
+    return (
+        any(normalized(term) in title for term in direction.get("title_keywords", []))
+        or any(normalized(term) in abstract for term in direction.get("abstract_keywords", []))
+        or any(combo and all(normalized(term) in abstract for term in combo)
+               for combo in direction.get("abstract_combos", []))
+    )
+
+
 def hybrid_fetch(config: dict, report_date: str | None = None) -> list[ArxivPaper]:
-    api_papers = fetch_api(config, report_date)
     if report_date:
+        api_papers = fetch_api(config, report_date)
         # 补收按 UTC 首次提交日期查询，不能把当前 RSS 当作历史公告。
         return [paper for paper in api_papers.values()
                 if paper.published.astimezone(timezone.utc).strftime("%Y-%m-%d") == report_date]
-    _rss_papers, rss_metadata = fetch_rss(config)
-
-    for arxiv_id, paper in api_papers.items():
-        if arxiv_id in rss_metadata:
-            paper.announce_type = rss_metadata[arxiv_id]["announce_type"]
-            paper.rss_pub_date = rss_metadata[arxiv_id]["pub_date"]
-        else:
-            paper.announce_type = None
-            paper.rss_pub_date = None
-
-    candidates = []
-    now = datetime.now(timezone.utc)
-    staleness_hours = config["arxiv"].get("staleness_threshold_hours", 24)
-
-    for paper in api_papers.values():
-        if paper.announce_type in ("replace", "replace-cross"):
+    rss_papers, _ = fetch_rss(config)
+    selected = {}
+    for paper_id, paper in rss_papers.items():
+        if paper.announce_type not in ("new", "cross"):
             continue
+        for direction_id, direction in config["research_directions"].items():
+            if _matches_direction(paper, direction):
+                paper.matched_direction = direction_id
+                selected[paper_id] = paper
+                break
 
-        if paper.announce_type in ("new", "cross"):
-            candidates.append(paper)
-            continue
-
-        # Not in RSS — apply safety net
-        updated = paper.updated
-        if updated.tzinfo is None:
-            updated = updated.replace(tzinfo=timezone.utc)
-        age = now - updated
-        if age <= timedelta(hours=staleness_hours):
-            candidates.append(paper)
-            logger.info("Keeping API-only paper (age %s): %s", age, paper.arxiv_id)
-        else:
-            logger.debug("Discarding stale API-only paper (age %s): %s", age, paper.arxiv_id)
-
-    logger.info("Hybrid fetch: %d API papers + %d RSS entries -> %d candidates",
-                len(api_papers), len(rss_metadata), len(candidates))
-    return candidates
+    # Announcement membership, not the first submission date, defines a daily
+    # batch. Hydrate every selected ID so RSS's announcement timestamp and
+    # placeholder version never become the source/PDF identity.
+    client = arxiv.Client(delay_seconds=config["arxiv"].get("api_delay_seconds", 3),
+                          num_retries=config["arxiv"].get("api_num_retries", 5))
+    papers = {}
+    ids = list(selected)
+    for start in range(0, len(ids), 100):
+        batch = ids[start:start + 100]
+        search = arxiv.Search(id_list=batch, max_results=len(batch))
+        for result in client.results(search):
+            paper_id = _strip_version(result.entry_id.split("/")[-1])[0]
+            if paper_id not in batch:
+                raise ValueError("arXiv API returned an unrequested paper")
+            announcement = selected[paper_id]
+            paper = _result_to_paper(result, announcement.matched_direction)
+            paper.announce_type = announcement.announce_type
+            paper.rss_pub_date = announcement.rss_pub_date
+            papers[paper_id] = paper
+    if set(papers) != set(selected):
+        raise ValueError("arXiv API omitted announced papers; refusing a partial collection")
+    logger.info("Announcement fetch: %d RSS entries -> %d candidates", len(rss_papers), len(papers))
+    return [papers[paper_id] for paper_id in ids]

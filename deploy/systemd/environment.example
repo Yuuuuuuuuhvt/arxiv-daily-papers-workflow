@@ -8,8 +8,8 @@ OPENROUTER_API_KEY=
 # Set PAPERS_QUICK_START=0 and SKIP_DEEP_RESEARCH=0 for full analysis.
 PAPERS_QUICK_START=1
 MAX_PAPERS=0
-# Scheduled full runs query the previous UTC first-submission date.
-PAPERS_DATE_MODE=previous-day
+# Scheduled full runs read the latest announced RSS batch.
+PAPERS_DATE_MODE=current
 SKIP_DEEP_RESEARCH=1
 SKIP_EMAIL=1
 SKIP_GIT_PUSH=1
