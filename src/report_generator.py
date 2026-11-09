@@ -20,6 +20,7 @@ DIRECTION_DISPLAY = {
     "autonomous_driving": "Autonomous Driving",
     "agentic": "Agentic AI",
     "robotics": "Robotics",
+    "scene_reconstruction": "3DGS / 三维重建与仿真场景",
     "multiple": "Multiple",
 }
 

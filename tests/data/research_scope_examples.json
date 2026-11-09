@@ -42,6 +42,14 @@
       "expected_direction": "autonomous_driving"
     },
     {
+      "id": "example-scene",
+      "title": "Simulation-ready Gaussian splatting scenes with collision geometry",
+      "abstract": "We reconstruct 3D scenes from multi-view images with Gaussian splatting and extract collision meshes and physical properties for interactive simulation. Evaluation measures novel view synthesis quality and rendering speed. The method uses no robot experiment and no foundation model.",
+      "categories": ["cs.GR", "cs.CV"],
+      "expected_verdict": "core",
+      "expected_direction": "scene_reconstruction"
+    },
+    {
       "id": "example-unrelated",
       "title": "A molecular contrast agent for magnetic resonance imaging",
       "abstract": "We synthesize a chemical contrast agent and measure its magnetic relaxation properties. The paper studies molecular chemistry and has no artificial intelligence agent, robotics, autonomous driving or world-model contribution.",

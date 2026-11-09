@@ -1,5 +1,5 @@
 arxiv:
-  rss_categories: "cs.CV+cs.RO+cs.AI+cs.LG+cs.MA+cs.CL+cs.SE+cs.HC+eess.SY"
+  rss_categories: "cs.CV+cs.RO+cs.AI+cs.LG+cs.MA+cs.CL+cs.SE+cs.HC+eess.SY+cs.GR"
   api_max_results_per_direction: 50
   api_delay_seconds: 3
   staleness_threshold_hours: 24
@@ -159,6 +159,42 @@ research_directions:
       - "cs.LG"
       - "eess.SY"
 
+  scene_reconstruction:
+    title_keywords:
+      - "Gaussian splatting"
+      - "3D Gaussian"
+      - "4D Gaussian"
+      - "neural radiance field"
+      - "NeRF"
+      - "novel view synthesis"
+      - "scene reconstruction"
+      - "surface reconstruction"
+      - "3D reconstruction"
+      - "simulation-ready"
+      - "3D scene generation"
+      - "3D scene editing"
+    abstract_keywords:
+      - "Gaussian splatting"
+      - "neural radiance field"
+      - "novel view synthesis"
+      - "simulation-ready asset"
+      - "mesh reconstruction"
+    abstract_combos:
+      - ["scene reconstruction", "simulation"]
+      - ["3D scene", "physical properties"]
+      - ["3D scene", "collision"]
+      - ["3D scene", "interactive"]
+      - ["scene generation", "simulation"]
+      - ["Gaussian", "rendering efficiency"]
+      - ["3D reconstruction", "physics"]
+      - ["scene editing", "3D"]
+    categories:
+      - "cs.CV"
+      - "cs.GR"
+      - "cs.RO"
+      - "cs.AI"
+      - "cs.LG"
+
 models:
   relevance_filter:
     provider: "openrouter"
@@ -174,8 +210,9 @@ models:
 
 research_focus:
   description: |
-    We follow five complementary research directions: embodied AI and VLA,
-    world models, autonomous driving, agentic AI, and robotics.
+    We follow six complementary research directions: embodied AI and VLA,
+    world models, autonomous driving, agentic AI, robotics, and 3DGS,
+    3D reconstruction and simulation scenes.
     Each direction is independently relevant; a paper does not need to combine
     world models and VLA to receive a high focus relevance score.
     - World models, learned dynamics, simulation, and model-based planning
@@ -185,9 +222,13 @@ research_focus:
       long-horizon planning, multi-agent coordination, and agent evaluation
     - Robot manipulation, locomotion, navigation, SLAM, perception, tactile
       sensing, control, sim-to-real, hardware, and robotics benchmarks
+    - Gaussian splatting, NeRF, 3D and 4D scene reconstruction, novel view
+      synthesis, simulation-ready assets, scene generation and editing,
+      physical properties, collision, interactivity, and rendering efficiency
     Agentic research does not require a physical robot. Robotics contributions
     can use classical control or smaller learned models; absence of a foundation
-    model is not a reason to lower their relevance. Judge the actual contribution
+    model is not a reason to lower their relevance. Scene reconstruction papers
+    need a 3D scene contribution, not a robot experiment or foundation model. Judge the actual contribution
     and evidence rather than isolated keywords or the application label.
   high_keywords:
     - "world model"
@@ -212,6 +253,10 @@ research_focus:
     - "SLAM"
     - "robot control"
     - "tactile sensing"
+    - "Gaussian splatting"
+    - "scene reconstruction"
+    - "simulation-ready"
+    - "novel view synthesis"
   low_keywords: []
 
 scoring:

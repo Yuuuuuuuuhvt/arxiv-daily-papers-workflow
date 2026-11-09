@@ -26,6 +26,7 @@ DIRECTIONS = [
     ("autonomous_driving", "自动驾驶"),
     ("agentic", "Agentic AI"),
     ("robotics", "Robotics"),
+    ("scene_reconstruction", "3DGS / 三维重建与仿真场景"),
     ("multiple", "多方向"),
 ]
 

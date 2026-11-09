@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.config import load_config
 from src.models import AnalysisResult, ArxivPaper
-from src import relevance_filter, report_generator
+from src import fetcher, html_report, relevance_filter, report_generator
 
 
 def test_new_directions_reach_reports_and_email(monkeypatch):
@@ -26,12 +26,16 @@ def test_new_directions_reach_reports_and_email(monkeypatch):
     monkeypatch.setattr(relevance_filter, "call_llm", classify)
     config = load_config()
     core, peripheral = asyncio.run(relevance_filter.filter_relevance(papers, config["models"]["relevance_filter"], "test-key"))
-    assert len(core) == 5 and peripheral == []
+    assert len(core) == 6 and peripheral == []
     assert core[0].matched_direction == "agentic"
     assert core[1].matched_direction == "robotics"
     analyses = {p.arxiv_id: AnalysisResult(direction=p.matched_direction, weighted_score=4.0) for p in core}
     report = report_generator.generate_daily_report("2026-11-05", core, peripheral, analyses, {}, config)
     email = report_generator.generate_email_html("2026-11-05", core, analyses, config)
-    for label in ("Agentic AI", "Robotics", "Embodied AI / VLA", "World Models", "Autonomous Driving"):
+    for label in ("Agentic AI", "Robotics", "Embodied AI / VLA", "World Models", "Autonomous Driving", "3DGS / 三维重建与仿真场景"):
         assert label in report and label in email
     assert examples[-1]["title"] not in report
+    assert ("scene_reconstruction", "3DGS / 三维重建与仿真场景") in html_report.DIRECTIONS
+    assert "cs.GR" in config["arxiv"]["rss_categories"].split("+")
+    query = fetcher.build_query(config["research_directions"]["scene_reconstruction"])
+    assert 'ti:"3D Gaussian"' in query and "cat:cs.GR" in query

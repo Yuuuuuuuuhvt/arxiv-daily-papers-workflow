@@ -43,12 +43,18 @@ CORE:
   -> core, robotics; classical estimation is eligible
 - An open robot hand with tactile sensing and evaluated manipulation capabilities
   -> core, robotics; hardware can be the main contribution
+- A 3D Gaussian splatting method with faster rendering and surface reconstruction
+  -> core, scene_reconstruction; no robot experiment is required
+- Generating simulation-ready scenes with collision geometry and physical properties
+  -> core, scene_reconstruction
 
 PERIPHERAL:
 - A generic storage optimization with only a brief discussion of agent memory
   -> peripheral, agentic; agent behavior is not evaluated
 - A materials study motivated by robot grippers without a robot method or evaluation
   -> peripheral, robotics; it provides supporting context
+- A generic image-restoration network that mentions NeRF only as a downstream use
+  -> peripheral, scene_reconstruction; no 3D scene contribution
 
 NOT RELEVANT:
 - A contrast agent for medical imaging with no intelligent-agent or robot method
@@ -56,6 +62,8 @@ NOT RELEVANT:
 - Generic stock-price prediction with no action-taking agent contribution
   -> not_relevant, none
 - A video generator for visual entertainment without a world-model evaluation
+  -> not_relevant, none
+- CT image reconstruction or a numerical fluid simulation with no 3D scene method
   -> not_relevant, none"""
 
 
