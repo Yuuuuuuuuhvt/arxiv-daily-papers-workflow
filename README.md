@@ -83,6 +83,7 @@ Set `paper_input.prefer_latex: false` to use the previous PDF mode: files up to 
 | `OPENROUTER_API_KEY` | Required for collection and `--check` |
 | `PAPERS_CONFIG` | YAML file; defaults to the checkout's `config/config.yaml` |
 | `PAPERS_DATA_DIR` | Report and index directory; defaults to the checkout's `data` directory |
+| `PAPERS_WEB_REPORTS` | Set to `1` for HTTP reading with per-paper detail loading; default keeps standalone HTML |
 | `PAPERS_QUICK_START` | Set to `1` to use the isolated trial mode from a service environment file |
 | `PAPERS_BUDGET_USD` | Optional per-run model budget in USD; requires matching model price policies under `budget.models` |
 | `MAX_PAPERS` | Maximum new candidates per run; `0` means no limit |

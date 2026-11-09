@@ -173,6 +173,7 @@ var listEl=document.getElementById("list"), readerEl=document.getElementById("re
 var countEl=document.getElementById("count"), dirEl=document.getElementById("directions");
 var tocEl=document.getElementById("toc"),tocList=document.getElementById("toc-list");
 var crumb=document.getElementById("paper-crumb"),headings=[],scrollPending=false;
+var paperCache=new Map(),loadGeneration=0,activeRequest=null;
 function el(tag,text,cls){var e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
 function rich(tag,markup,cls){var e=el(tag,undefined,cls);e.innerHTML=markup;return e}
 function dirName(key){for(var i=0;i<directions.length;i++)if(directions[i][0]===key)return directions[i][1];return key||MISSING}
@@ -215,21 +216,66 @@ function applyFilters(){
   var shown=refresh();
   if(shown.some(function(p){return p.id===state.selected}))return;
   if(shown.length){select(shown[0].id,false,"replace");return}
-  state.selected=null;headings=[];tocEl.hidden=true;crumb.hidden=true;
+  cancelPendingLoad();state.selected=null;headings=[];tocEl.hidden=true;crumb.hidden=true;
+  readerEl.removeAttribute('data-loaded-id');readerEl.removeAttribute('aria-busy');
   readerEl.textContent="";readerEl.appendChild(el("p","没有符合条件的论文。","note"));
   history.replaceState(null,"","#paper-index");
 }
-function select(id,focus,historyMode){
+function cancelPendingLoad(){
+  loadGeneration++;
+  if(activeRequest)activeRequest.abort();
+  activeRequest=null;
+}
+async function select(id,focus,historyMode){
   var p=papers.filter(function(x){return x.id===id})[0];if(!p)return;
   // Back/forward navigation must show its paper even if a later filter hid it.
   if(!matches(p)){state.direction="";state.query="";document.getElementById("query").value="";refresh()}
   state.selected=id;
+  cancelPendingLoad();
+  var generation=loadGeneration;
   Array.prototype.forEach.call(listEl.querySelectorAll("button"),function(b){
     if(b.dataset.id===id)b.setAttribute("aria-current","true");else b.removeAttribute("aria-current")});
-  render(p);
   crumb.hidden=false;crumb.textContent="/ "+p.id;
   if(historyMode&&historyMode!=="none"&&location.hash!=="#"+id)history[historyMode+"State"](null,"","#"+id);
+  readerEl.removeAttribute('data-loaded-id');headings=[];tocEl.hidden=true;
+  readerEl.textContent='';readerEl.appendChild(rich('h2',p.title_html));
+  readerEl.appendChild(el('p','正在加载论文内容…','note'));
+  readerEl.setAttribute('aria-busy','true');
   if(focus){readerEl.focus({preventScroll:true});readerEl.scrollIntoView({block:"start"})}
+  var timeout=null,timedOut=false;
+  try{
+    var detail=p;
+    if(p.detail_url){
+      detail=paperCache.get(p.detail_url);
+      if(!detail){
+        var request=new AbortController();activeRequest=request;
+        timeout=setTimeout(function(){timedOut=true;request.abort()},15000);
+        var response=await fetch(p.detail_url,{signal:request.signal});
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        detail=await response.json();
+        if(detail.id!==id)throw new Error('论文编号不匹配');
+        paperCache.set(p.detail_url,detail);
+      }
+    }
+    // A slow response must never replace a paper selected more recently.
+    if(generation!==loadGeneration)return;
+    render(detail);readerEl.dataset.loadedId=id;readerEl.removeAttribute('aria-busy');
+    var hash;try{hash=decodeURIComponent(location.hash.slice(1))}catch(e){hash=''}
+    var heading=document.getElementById(hash);
+    if(hash.startsWith(id+'/')&&heading)requestAnimationFrame(function(){if(generation===loadGeneration)jumpToHeading(heading)});
+  }catch(error){
+    if(generation!==loadGeneration)return;
+    readerEl.removeAttribute('aria-busy');readerEl.textContent='';
+    readerEl.appendChild(rich('h2',p.title_html));
+    var message=location.protocol==='file:'?'此版本需要通过网页服务读取论文详情，请使用 HTTP 地址打开。':timedOut?'论文加载超时，请重试。':'论文内容加载失败，请重试。';
+    readerEl.appendChild(el('p',message,'status'));
+    var retry=el('button','重新加载');retry.type='button';retry.id='retry-paper';
+    retry.addEventListener('click',function(){paperCache.delete(p.detail_url);select(id,false,'none')});
+    readerEl.appendChild(retry);
+  }finally{
+    if(timeout!==null)clearTimeout(timeout);
+    if(generation===loadGeneration)activeRequest=null;
+  }
 }
 function render(p){
   readerEl.textContent="";
@@ -337,10 +383,11 @@ window.addEventListener('popstate',restoreLocation);
 window.addEventListener('hashchange',restoreLocation);
 document.getElementById('toc-toggle').addEventListener('click',function(){setContentsOpen(tocEl.dataset.collapsed==='true')});
 document.getElementById('toc').addEventListener('keydown',function(e){if(e.key==='Escape'){setContentsOpen(false);document.getElementById('toc-toggle').focus()}});
-function returnToList(e){e.preventDefault();document.getElementById('paper-index').scrollIntoView({block:'start'});document.getElementById('query').focus({preventScroll:true})}
+function clearSectionLocation(){if(state.selected)history.replaceState(null,'','#'+state.selected)}
+function returnToList(e){e.preventDefault();clearSectionLocation();document.getElementById('paper-index').scrollIntoView({block:'start'});document.getElementById('query').focus({preventScroll:true})}
 document.getElementById('back-list').addEventListener('click',returnToList);
 document.getElementById('day-link').addEventListener('click',returnToList);
-document.getElementById('back-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'instant'});document.getElementById('page-title').focus({preventScroll:true})});
+document.getElementById('back-top').addEventListener('click',function(){clearSectionLocation();window.scrollTo({top:0,behavior:'instant'});document.getElementById('page-title').focus({preventScroll:true})});
 buildFilters();
 document.getElementById("query").addEventListener("input",function(e){state.query=e.target.value.trim().toLowerCase();applyFilters()});
 refresh();

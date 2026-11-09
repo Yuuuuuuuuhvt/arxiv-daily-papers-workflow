@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from .config import TEMPLATES_DIR, DATA_DIR, release_pdf_url
 from .models import AnalysisResult, ArxivPaper
+from .html_report import generate_html_report, generate_web_report
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +129,28 @@ def save_html_report(content: str, date_str: str, data_dir: Path | None = None) 
     if date_str >= newest:
         targets.append(reports_dir / "latest.html")
     for target in targets:
-        _write_html(target, content)
+        _write_text_atomic(target, content)
     logger.info("HTML report saved: %s", path)
     return path
 
 
-def _write_html(path: Path, content: str) -> None:
+def save_reading_report(state: dict, summary: dict, data_dir: Path | None = None) -> Path:
+    """Save standalone HTML locally, or an on-demand web reader for HTTP hosting."""
+    data_dir = data_dir if data_dir is not None else DATA_DIR
+    if os.environ.get("PAPERS_WEB_REPORTS", "").strip() != "1":
+        return save_html_report(generate_html_report(state, summary), state["date"], data_dir)
+    content, assets = generate_web_report(state, summary)
+    for name, payload in assets.items():
+        path = data_dir / "reports" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            _write_text_atomic(path, payload)
+        elif path.read_text(encoding="utf-8") != payload:
+            raise ValueError(f"Existing immutable paper payload is damaged: {path.name}")
+    return save_html_report(content, state["date"], data_dir)
+
+
+def _write_text_atomic(path: Path, content: str) -> None:
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as file:
         file.write(content)
         temporary = file.name
@@ -190,10 +207,10 @@ def save_report_index(data_dir: Path | None = None) -> Path:
     )
     # save_html_report points latest.html at the newest date even when that date is a hidden empty
     # weekend, so the stable entry is re-synced here to the newest visible report, or to this index.
-    _write_html(reports_dir / "latest.html",
+    _write_text_atomic(reports_dir / "latest.html",
                 (reports_dir / items[0]["url"]).read_text(encoding="utf-8") if items else content)
     path = reports_dir / "index.html"
-    _write_html(path, content)
+    _write_text_atomic(path, content)
     return path
 
 

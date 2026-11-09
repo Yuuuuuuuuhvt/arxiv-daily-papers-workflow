@@ -23,14 +23,13 @@ from .email_sender import send_digest
 from .fetcher import hybrid_fetch
 from .pdf_downloader import download_all_pdfs
 from .git_ops import commit_and_push_data
-from .html_report import generate_html_report
 from .models import ArxivPaper, AnalysisResult, paper_to_index_entry
 from .relevance_filter import filter_relevance
 from .report_generator import (
     generate_daily_report,
     generate_email_html,
     save_report,
-    save_html_report,
+    save_reading_report,
     save_report_index,
 )
 
@@ -79,7 +78,7 @@ def save_empty_run(date_str: str, status: str, config: dict, summary: dict, data
     state = {"date": date_str, "stage": status, "candidates": [], "core_ids": [],
              "peripheral_ids": [], "analyses": {}, "deep_research_reports": {}}
     save_report(generate_daily_report(date_str, [], [], {}, {}, config), date_str, data_dir)
-    save_html_report(generate_html_report(state, summary), date_str, data_dir)
+    save_reading_report(state, summary, data_dir)
     _save_checkpoint(data_dir, date_str, state)
     save_run_summary(date_str, summary, data_dir)
 
@@ -369,7 +368,7 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
         summary[field] = sum(report.startswith(prefix) for report in deep_reports.values())
     if budget is not None:
         summary["budget"] = budget.snapshot()
-    save_html_report(generate_html_report(report_state(status), summary), date_str, data_dir)
+    save_reading_report(report_state(status), summary, data_dir)
     save_run_summary(date_str, summary, data_dir)
     checkpoint(status)
 

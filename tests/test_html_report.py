@@ -145,3 +145,34 @@ def test_report_index_preserves_empty_days_and_recent_papers(tmp_path):
     index = save_report_index(empty_root).read_text()
     assert 'href="2026-11-07.html"' not in index
     assert (reports / 'latest.html').read_text() == index
+
+def test_web_reader_publishes_immutable_details_before_index(monkeypatch, tmp_path):
+    from src.html_report import generate_web_report
+    from src.report_generator import save_reading_report
+    state = {"date": "2026-11-09", "candidates": [{"arxiv_id": "2611.12345", "title": "Paper",
+             "abstract": "Abstract", "authors": ["Author"], "matched_direction": "robotics"}],
+             "core_ids": ["2611.12345"], "analyses": {"2611.12345": {"direction": "robotics",
+             "one_line_summary": "searchable summary", "key_terms": ["robot"]}},
+             "deep_research_reports": {"2611.12345": "# Method\nFull analysis $x^2$."}}
+    summary = {"status": "completed"}
+    standalone = embedded_papers(generate_html_report(state, summary))
+    page, assets = generate_web_report(state, summary)
+    index = embedded_papers(page)
+    assert "report_html" not in index[0] and "abstract_html" not in index[0]
+    assert index[0]["analysis"] == {"terms": ["robot"], "one_line": "searchable summary"}
+    assert json.loads(assets[index[0]["detail_url"]]) == standalone[0]
+    monkeypatch.setenv("PAPERS_WEB_REPORTS", "1")
+    path = save_reading_report(state, summary, tmp_path)
+    old_index = path.read_text()
+    payload_path = tmp_path / "reports" / index[0]["detail_url"]
+    assert json.loads(payload_path.read_text()) == standalone[0]
+    payload_path.write_text("damaged")
+    import pytest
+    with pytest.raises(ValueError, match="damaged"):
+        save_reading_report(state, summary, tmp_path)
+    assert path.read_text() == old_index
+    payload_path.write_text(assets[index[0]["detail_url"]])
+    state["deep_research_reports"]["2611.12345"] = "# Updated analysis"
+    new_path = save_reading_report(state, summary, tmp_path)
+    new_url = embedded_papers(new_path.read_text())[0]["detail_url"]
+    assert new_url != index[0]["detail_url"] and payload_path.is_file()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import os
 import re
@@ -306,8 +307,30 @@ def generate_html_report(state: dict, summary: dict) -> str:
     state 含 date, candidates, core_ids, peripheral_ids, analyses,
     deep_research_reports, 可选 editorial_notes. 函数不读写文件也不访问网络.
     """
-    date = _text_or_missing(state.get("date"))
     papers = _build_papers(state, state.get("editorial_notes") or {})
+    return _render_html_report(state, summary, papers)
+
+
+def generate_web_report(state: dict, summary: dict) -> tuple[str, dict[str, str]]:
+    """Render a searchable index and separate immutable paper payloads."""
+    index = []
+    assets = {}
+    for paper in _build_papers(state, state.get("editorial_notes") or {}):
+        content = json.dumps(paper, ensure_ascii=False, separators=(",", ":"))
+        # Content-addressed URLs keep open tabs consistent when a daily report
+        # is regenerated. Assets must be published before the HTML referencing them.
+        name = f"papers/{hashlib.sha256(content.encode('utf-8')).hexdigest()}.json"
+        assets[name] = content
+        entry = {key: paper[key] for key in ("id", "title", "title_html", "authors", "direction", "level", "weighted")}
+        analysis = paper["analysis"]
+        entry["analysis"] = {key: analysis[key] for key in ("terms", "one_line")} if analysis else None
+        entry["detail_url"] = name
+        index.append(entry)
+    return _render_html_report(state, summary, index), assets
+
+
+def _render_html_report(state: dict, summary: dict, papers: list[dict]) -> str:
+    date = _text_or_missing(state.get("date"))
     fields = SUMMARY_FIELDS + [f for f in OPTIONAL_SUMMARY_FIELDS if _first_present(summary, f[0]) is not None]
     stats = [(label, _display_number(_first_present(summary, keys))) for keys, label in fields]
     data = {"papers": papers, "directions": DIRECTIONS, "missing": MISSING}
