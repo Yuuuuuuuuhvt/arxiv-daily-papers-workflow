@@ -47,6 +47,12 @@ CORE:
   -> core, scene_reconstruction; no robot experiment is required
 - Generating simulation-ready scenes with collision geometry and physical properties
   -> core, scene_reconstruction
+- A pretraining objective that improves long-context reasoning in language models
+  -> core, llm_foundation; no agent or robot is required
+- A quantization method that speeds up inference of multimodal foundation models
+  -> core, llm_foundation; efficiency can be the main contribution
+- A jailbreak attack and a matching defense evaluated on several language models
+  -> core, llm_safety
 
 PERIPHERAL:
 - A generic storage optimization with only a brief discussion of agent memory
@@ -55,6 +61,8 @@ PERIPHERAL:
   -> peripheral, robotics; it provides supporting context
 - A generic image-restoration network that mentions NeRF only as a downstream use
   -> peripheral, scene_reconstruction; no 3D scene contribution
+- A clinical benchmark reporting where general language models fail, with no new method
+  -> peripheral, llm_foundation; it provides evaluation context
 
 NOT RELEVANT:
 - A contrast agent for medical imaging with no intelligent-agent or robot method
@@ -64,6 +72,10 @@ NOT RELEVANT:
 - A video generator for visual entertainment without a world-model evaluation
   -> not_relevant, none
 - CT image reconstruction or a numerical fluid simulation with no 3D scene method
+  -> not_relevant, none
+- Prompting an existing language model to grade essays, with no finding about the model
+  -> not_relevant, none
+- A network intrusion detector with no language or foundation model component
   -> not_relevant, none"""
 
 

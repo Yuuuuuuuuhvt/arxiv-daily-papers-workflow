@@ -50,6 +50,22 @@
       "expected_direction": "scene_reconstruction"
     },
     {
+      "id": "example-llm",
+      "title": "A pretraining objective for long-context reasoning in language models",
+      "abstract": "We propose a pretraining objective that teaches large language models to track facts across long documents. Evaluation covers reasoning benchmarks and training cost on several model sizes. The method uses no agent, tool or robot.",
+      "categories": ["cs.CL", "cs.LG"],
+      "expected_verdict": "core",
+      "expected_direction": "llm_foundation"
+    },
+    {
+      "id": "example-safety",
+      "title": "Detecting prompt injection in tool outputs",
+      "abstract": "We study prompt injection attacks hidden in retrieved documents and train a detector that blocks them before a model follows the injected instructions. Evaluation reports attack success rates on several models with and without the defense.",
+      "categories": ["cs.CR", "cs.CL"],
+      "expected_verdict": "core",
+      "expected_direction": "llm_safety"
+    },
+    {
       "id": "example-unrelated",
       "title": "A molecular contrast agent for magnetic resonance imaging",
       "abstract": "We synthesize a chemical contrast agent and measure its magnetic relaxation properties. The paper studies molecular chemistry and has no artificial intelligence agent, robotics, autonomous driving or world-model contribution.",

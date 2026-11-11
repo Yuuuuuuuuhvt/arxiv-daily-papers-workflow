@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI 与 VLA、World Models、Autonomous Driving、Agentic AI、Robotics 和 3DGS / 三维重建与仿真场景六个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
+全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI 与 VLA、World Models、Autonomous Driving、Agentic AI、Robotics、3DGS / 三维重建与仿真场景、LLM 基础模型和 LLM 安全与对齐八个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
 
 - **技术栈**: Python 3.11+, asyncio, httpx, Jinja2, PyYAML, feedparser, arxiv
 - **LLM 网关**: 默认经 OpenRouter (openrouter.ai) 路由。每个阶段的 `models.*.provider` 也可以选择 `codex-relay`（OpenAI Responses 协议）或 `gemini-relay`（Anthropic Messages 协议）。
@@ -134,8 +134,10 @@ pytest tests/ -v
 ### Adding a New Research Direction
 
 1. Add keyword block in `config/config.yaml` under `research_directions`.
-2. Update `prompts/relevance_filter.txt` to describe the new direction for LLM classification.
+2. Update `prompts/relevance_filter.txt` to describe the new direction for LLM classification, and add calibration examples to `FEW_SHOT_BLOCK` in `relevance_filter.py`.
 3. Add display names in `report_generator.py` `DIRECTION_DISPLAY` and `html_report.py` `DIRECTIONS`.
+4. Add the direction to the audience line and the `direction` field in `prompts/deep_analysis.txt`, to the direction lists in `prompts/deep_research.txt`, and to `research_focus` in `config/config.yaml`.
+5. An instance that sets `PAPERS_CONFIG` reads its own YAML copy, so repeat the `config/config.yaml` changes there.
 
 ### Adding a New Pipeline Stage
 

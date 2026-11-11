@@ -29,6 +29,8 @@ DIRECTIONS = [
     ("agentic", "Agentic AI"),
     ("robotics", "Robotics"),
     ("scene_reconstruction", "3DGS / 三维重建与仿真场景"),
+    ("llm_foundation", "LLM / 基础模型"),
+    ("llm_safety", "LLM 安全与对齐"),
     ("multiple", "多方向"),
 ]
 

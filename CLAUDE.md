@@ -40,7 +40,7 @@ On PowerShell, set runtime flags with `$env:NAME = 'value'`, then run `python -m
 
 ## Architecture
 
-This repository is an arXiv paper discovery pipeline for Embodied AI and VLA, World Models, Autonomous Driving, Agentic AI, and Robotics. Each direction is independently relevant. It runs independently of CI. `deploy/systemd/` provides a Linux user service and a weekday timer at UTC 05:30; `docs/self-hosting.md` describes installation. `.github/workflows/quick-start.yml` provides an optional trial. The older publishing workflows depend on maintainer infrastructure.
+This repository is an arXiv paper discovery pipeline for Embodied AI and VLA, World Models, Autonomous Driving, Agentic AI, Robotics, 3DGS and 3D Reconstruction, LLM and Foundation Models, and LLM Safety and Alignment. Each direction is independently relevant. It runs independently of CI. `deploy/systemd/` provides a Linux user service and a weekday timer at UTC 05:30; `docs/self-hosting.md` describes installation. `.github/workflows/quick-start.yml` provides an optional trial. The older publishing workflows depend on maintainer infrastructure.
 
 The pipeline is sequentially orchestrated by `src/main.py::run_pipeline()`:
 
@@ -82,7 +82,7 @@ Fetch API and RSS -> Dedup -> Relevance Filter -> Deep Analysis -> PDF Download
 
 ## Extension Patterns
 
-- Add a research direction by adding a block under `research_directions` in `config/config.yaml`, updating `prompts/relevance_filter.txt`, and adding a display label to `DIRECTION_DISPLAY` in `src/report_generator.py`.
+- Add a research direction by adding a block under `research_directions` in `config/config.yaml`, updating `prompts/relevance_filter.txt`, and adding a display label to `DIRECTION_DISPLAY` in `src/report_generator.py` and `DIRECTIONS` in `src/html_report.py`. `AGENTS.md` lists the remaining prompt and instance-config places.
 - Add a pipeline stage by creating a focused `src/<stage>.py` module, wiring it into `src/main.py::run_pipeline()`, adding a semaphore for network or LLM fanout when needed, and moving new knobs into `config/config.yaml`.
 - Change output structure by updating `src/report_generator.py::_paper_view()` and the relevant template together. Avoid putting business logic directly into Jinja2 templates.
 - Change model behavior by editing prompt files and `models.*` entries in `config/config.yaml`. If response structure changes, update the relevant parser and preserve malformed JSON fallbacks.

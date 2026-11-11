@@ -1,5 +1,5 @@
 arxiv:
-  rss_categories: "cs.CV+cs.RO+cs.AI+cs.LG+cs.MA+cs.CL+cs.SE+cs.HC+eess.SY+cs.GR"
+  rss_categories: "cs.CV+cs.RO+cs.AI+cs.LG+cs.MA+cs.CL+cs.SE+cs.HC+eess.SY+cs.GR+cs.CR"
   api_max_results_per_direction: 50
   api_delay_seconds: 3
   staleness_threshold_hours: 24
@@ -202,6 +202,92 @@ research_directions:
       - "cs.AI"
       - "cs.LG"
 
+  # The two language-model directions match broadly on purpose: the relevance
+  # filter, not these phrases, separates research on the models from papers
+  # that only apply an existing model. They stay last so that a paper matching
+  # an earlier direction keeps that direction as its initial label.
+  llm_foundation:
+    title_keywords:
+      - "large language model"
+      - "large language models"
+      - "LLM"
+      - "LLMs"
+      - "language model"
+      - "language models"
+      - "foundation model"
+      - "foundation models"
+      - "vision-language model"
+      - "vision-language models"
+      - "multimodal model"
+      - "multimodal models"
+      - "transformer"
+      - "transformers"
+      - "pretraining"
+      - "pre-training"
+      - "in-context learning"
+      - "chain-of-thought"
+      - "tokenizer"
+      - "mechanistic interpretability"
+    abstract_keywords:
+      - "large language model"
+      - "large language models"
+      - "foundation model"
+      - "foundation models"
+      - "vision-language model"
+      - "vision-language models"
+      - "in-context learning"
+      - "mechanistic interpretability"
+    abstract_combos:
+      - ["language models", "pretraining"]
+      - ["language models", "fine-tuning"]
+      - ["language models", "reasoning"]
+      - ["transformer", "attention"]
+    categories:
+      - "cs.CL"
+      - "cs.LG"
+      - "cs.AI"
+      - "cs.CV"
+
+  llm_safety:
+    title_keywords:
+      - "jailbreak"
+      - "jailbreaks"
+      - "jailbreaking"
+      - "prompt injection"
+      - "red teaming"
+      - "AI safety"
+      - "LLM safety"
+      - "AI alignment"
+      - "guardrail"
+      - "guardrails"
+      - "hallucination"
+      - "hallucinations"
+      - "machine unlearning"
+      - "sycophancy"
+    abstract_keywords:
+      - "jailbreak"
+      - "jailbreaks"
+      - "prompt injection"
+      - "red teaming"
+      - "AI safety"
+      - "safety alignment"
+      - "harmful content"
+    abstract_combos:
+      - ["language models", "safety"]
+      - ["language models", "adversarial"]
+      - ["language models", "privacy"]
+      - ["language models", "backdoor"]
+      - ["language models", "unlearning"]
+      - ["language models", "watermark"]
+      - ["LLM", "safety"]
+      - ["LLM", "attack"]
+    categories:
+      - "cs.CL"
+      - "cs.LG"
+      - "cs.AI"
+      - "cs.CR"
+      - "cs.CV"
+
 models:
   relevance_filter:
     provider: "openrouter"
@@ -217,9 +303,10 @@ models:
 
 research_focus:
   description: |
-    We follow six complementary research directions: embodied AI and VLA,
-    world models, autonomous driving, agentic AI, robotics, and 3DGS,
-    3D reconstruction and simulation scenes.
+    We follow eight complementary research directions: embodied AI and VLA,
+    world models, autonomous driving, agentic AI, robotics, 3DGS, 3D
+    reconstruction and simulation scenes, large language and foundation
+    models, and LLM safety and alignment.
     Each direction is independently relevant; a paper does not need to combine
     world models and VLA to receive a high focus relevance score.
     - World models, learned dynamics, simulation, and model-based planning
@@ -232,10 +319,18 @@ research_focus:
     - Gaussian splatting, NeRF, 3D and 4D scene reconstruction, novel view
       synthesis, simulation-ready assets, scene generation and editing,
       physical properties, collision, interactivity, and rendering efficiency
+    - Large language models and multimodal foundation models: architecture,
+      pretraining, reasoning, adaptation, efficiency, interpretability, and
+      evaluation of general capabilities
+    - Safety, security and alignment of language models and their agents:
+      jailbreaks, prompt injection, red teaming, hallucination, privacy,
+      backdoors, unlearning, watermarking, and safety evaluation
     Agentic research does not require a physical robot. Robotics contributions
     can use classical control or smaller learned models; absence of a foundation
     model is not a reason to lower their relevance. Scene reconstruction papers
-    need a 3D scene contribution, not a robot experiment or foundation model. Judge the actual contribution
+    need a 3D scene contribution, not a robot experiment or foundation model.
+    Language-model research needs a contribution about the models themselves,
+    not only an application of an existing model. Judge the actual contribution
     and evidence rather than isolated keywords or the application label.
   high_keywords:
     - "world model"
@@ -264,6 +359,16 @@ research_focus:
     - "scene reconstruction"
     - "simulation-ready"
     - "novel view synthesis"
+    - "large language model"
+    - "foundation model"
+    - "pretraining"
+    - "in-context learning"
+    - "interpretability"
+    - "jailbreak"
+    - "prompt injection"
+    - "red teaming"
+    - "alignment"
+    - "hallucination"
   low_keywords: []
 
 scoring:
