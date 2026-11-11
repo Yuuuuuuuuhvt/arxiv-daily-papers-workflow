@@ -24,24 +24,50 @@ _MAX_MULTIMODAL_BYTES = 50 * 1024 * 1024
 
 def _pack_segments(lead_bytes: int, images: list[tuple[list[dict], int, int]],
                    max_pixels: int) -> list[tuple[list[dict], int]]:
-    """Group consecutive images into requests that each fit the single-request limits.
+    """Group consecutive images into the fewest requests that fit the single-request
+    limits, loaded as evenly as the images allow.
 
     Every request repeats the paper text, so lead_bytes counts against each one.
     Returns the content parts and byte size of every request. An image that
     cannot fit even alone still gets its own request; the caller rejects it by
     its size, because dropping or shrinking it would truncate the paper."""
-    segments: list[tuple[list[dict], int]] = []
-    parts: list[dict] = []
+    if not images:
+        return [([], lead_bytes)]
+
+    def build(groups: list[list[int]]) -> list[tuple[list[dict], int, int]]:
+        return [([part for i in group for part in images[i][0]],
+                 lead_bytes + sum(images[i][1] for i in group),
+                 sum(images[i][2] for i in group)) for group in groups if group]
+
+    # Filling each request to the limit gives the fewest requests.
+    full: list[list[int]] = [[]]
     size, pixels = lead_bytes, 0
-    for image_parts, image_bytes, image_pixels in images:
-        if parts and (size + image_bytes > _MAX_MULTIMODAL_BYTES or pixels + image_pixels > max_pixels):
-            segments.append((parts, size))
-            parts, size, pixels = [], lead_bytes, 0
-        parts = parts + image_parts
+    for i, (_, image_bytes, image_pixels) in enumerate(images):
+        if full[-1] and (size + image_bytes > _MAX_MULTIMODAL_BYTES or pixels + image_pixels > max_pixels):
+            full.append([])
+            size, pixels = lead_bytes, 0
+        full[-1].append(i)
         size += image_bytes
         pixels += image_pixels
-    segments.append((parts, size))
-    return segments
+
+    count, capacity = len(full), _MAX_MULTIMODAL_BYTES - lead_bytes
+    if count > 1 and capacity > 0:
+        # Several requests close to the limit at once have dropped connections
+        # on a relay. Keep the request count but give each request an equal
+        # share of the load, where an image's load is the larger of its shares
+        # of the byte and pixel limits. The midpoint keeps the groups in order.
+        loads = [max(image_bytes / capacity, image_pixels / max_pixels) for _, image_bytes, image_pixels in images]
+        total, done = sum(loads), 0.0
+        even: list[list[int]] = [[] for _ in range(count)]
+        for i, load in enumerate(loads):
+            even[min(int((done + load / 2) / total * count), count - 1)].append(i)
+            done += load
+        balanced = build(even)
+        # Very uneven images can push an equal share over a limit; filling is
+        # then the only split known to fit.
+        if all(size <= _MAX_MULTIMODAL_BYTES and pixels <= max_pixels for _, size, pixels in balanced):
+            return [(parts, size) for parts, size, _ in balanced]
+    return [(parts, size) for parts, size, _ in build(full)]
 
 
 def _save_input_manifest(path: Path, manifest: dict) -> None:

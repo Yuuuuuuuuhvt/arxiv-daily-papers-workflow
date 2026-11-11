@@ -86,7 +86,7 @@ def test_oversized_input_is_read_in_segments_then_synthesized(monkeypatch, tmp_p
     day = datetime(2026, 11, 5, tzinfo=timezone.utc)
     paper = ArxivPaper('sample', 2, 'Synthetic', 'Abstract', [], [], 'cs.RO', day, day, '', '')
     figures = []
-    for name, color in [('method', 'red'), ('results', 'blue'), ('ablation', 'green')]:
+    for name, color in [('method', 'red'), ('results', 'blue'), ('ablation', 'green'), ('failure', 'black')]:
         path = tmp_path / f'{name}.png'
         Image.new('RGB', (20, 15), color).save(path)
         figures.append(latex_source.SourceFigure(path, name, name + ' caption'))
@@ -102,14 +102,20 @@ def test_oversized_input_is_read_in_segments_then_synthesized(monkeypatch, tmp_p
         return 'Final report'
     monkeypatch.setattr(latex_source, 'prepare_latex_source', prepare)
     monkeypatch.setattr(deep_research, 'call_llm', answer)
-    # Two 300-pixel images fill one request, so three images need two requests.
-    monkeypatch.setattr(figure_input, 'DEFAULT_MAX_TOTAL_PIXELS', 600)
+    # Three 300-pixel images fill one request, so four images need two requests.
+    # They are shared evenly as two and two, not filled as three and one.
+    monkeypatch.setattr(figure_input, 'DEFAULT_MAX_TOTAL_PIXELS', 900)
     result = asyncio.run(deep_research.generate_deep_research(
         paper, {'model_id': 'test'}, 'test', source_config={'storage_dir': str(tmp_path / 'cache'), 'max_segments': 2}))
-    assert result.startswith('> 输入依据：LaTeX 正文与引用图片，3 张图像，分 2 段阅读，') and result.endswith('Final report')
-    assert [sum(p['type'] == 'image_url' for p in call['messages'][1]['content']) for call in calls[:2]] == [2, 1]
+    assert result.startswith('> 输入依据：LaTeX 正文与引用图片，4 张图像，分 2 段阅读，') and result.endswith('Final report')
+    assert [sum(p['type'] == 'image_url' for p in call['messages'][1]['content']) for call in calls[:2]] == [2, 2]
     synthesis = calls[2]['messages'][1]['content']
     assert len(calls) == 3 and 'Complete body text' in synthesis
-    assert 'saw 引用：method' in synthesis and 'saw 引用：ablation' in synthesis
+    assert 'saw 引用：method' in synthesis and 'saw 引用：ablation' in synthesis and '引用：failure' in synthesis
     manifest = json.loads((tmp_path / 'cache/inputs/samplev2.json').read_text())
-    assert manifest['segment_image_counts'] == [2, 1] and manifest['status'] == 'response_received'
+    assert manifest['segment_image_counts'] == [2, 2] and manifest['status'] == 'response_received'
+    # An even share would put the last two images, 1000 pixels, in one request
+    # over the 900-pixel limit, so the split that fills each request is kept.
+    uneven = [([{'type': 'text', 'text': str(pixels)}], 10, pixels) for pixels in (100, 700, 800, 200)]
+    assert [len(parts) for parts, _ in deep_research._pack_segments(0, uneven, 900)] == [2, 1, 1]
+    assert deep_research._pack_segments(7, [], 900) == [([], 7)]
