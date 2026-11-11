@@ -298,6 +298,7 @@ concurrency:
 
 paper_input:
   prefer_latex: true  # Source text and every referenced image; complete PDF pages on failure.
+  max_segments: 8  # Requests one paper's images may be split across before a final synthesis; 1 never splits.
 
 pdf:
   download_enabled: true

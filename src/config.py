@@ -71,6 +71,9 @@ def load_config() -> dict:
     paper_input = config.get("paper_input", {})
     if not isinstance(paper_input, dict) or type(paper_input.get("prefer_latex", True)) is not bool:
         raise ValueError("paper_input must be a mapping with a boolean prefer_latex")
+    max_segments = paper_input.get("max_segments", 1)
+    if type(max_segments) is not int or max_segments < 1:
+        raise ValueError("paper_input.max_segments must be a positive integer")
     return config
 
 
