@@ -63,7 +63,7 @@ jobs:
           echo "GIT_ASKPASS=$RUNNER_TEMP/paper-auth/askpass" >> "$GITHUB_ENV"
           echo 'GIT_TERMINAL_PROMPT=0' >> "$GITHUB_ENV"
           export GIT_ASKPASS="$RUNNER_TEMP/paper-auth/askpass" GIT_TERMINAL_PROMPT=0
-          git clone --filter=blob:none --no-checkout --depth 1 https://git.luonto.me/yurun/embodied-daily-papers.git data
+          git clone --filter=blob:none --no-checkout --depth 1 https://git.luonto.me/yurun/arxiv-daily-papers-data.git data
           git -C data sparse-checkout init --cone
           git -C data sparse-checkout set reports run-metadata
           git -C data checkout main
