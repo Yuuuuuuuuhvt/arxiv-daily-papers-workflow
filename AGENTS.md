@@ -31,7 +31,8 @@ Data flow:
 2. **3-tier relevance**: `core` means a direct contribution to a tracked direction; `peripheral` means supporting context or an indirect connection; `not_relevant` means outside scope. Agentic and Robotics papers do not need a foundation model to qualify as core. Only core papers get DeepResearch.
 3. **Legacy PDF mode**: Local PDFs are base64-encoded and sent directly to OpenRouter, avoiding server-side URL fetch failures (OpenRouter 502 when downloading arXiv URLs). Files up to 5 MiB use native document input. Larger PDFs use local pypdf extraction of every page, without image pixels or OCR.
 4. **Concurrency**: `asyncio.Semaphore` controls parallel LLM calls (`max_concurrent_llm` for analysis, `max_concurrent_pdf` for DeepResearch).
-5. **Fail-safe**: Every LLM stage has fallback — parse failures default to `peripheral`, analysis failures use defaults, DeepResearch only falls back to abstract input when require_pdf is false; strict failures produce a partial report.
+5. **Resume**: `--resume YYYY-MM-DD` 从 `checkpoints/YYYY-MM-DD.json` 继续未完成的运行，不重新抓取，只补做缺失的分类、分析与 DeepResearch。当天公告的 RSS 批次在之后无法再次取得，所以检查点是补完该批次的唯一依据。
+6. **Fail-safe**: Every LLM stage has fallback — parse failures default to `peripheral`, analysis failures use defaults, DeepResearch only falls back to abstract input when require_pdf is false; strict failures produce a partial report.
 
 ---
 

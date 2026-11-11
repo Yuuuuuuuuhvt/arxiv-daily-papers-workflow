@@ -157,7 +157,7 @@ def _save_checkpoint(data_dir: Path, date_str: str, state: dict) -> None:
     os.replace(temporary, directory / f"{date_str}.json")
 
 
-async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -> None:
+async def run_pipeline(*, quick_start: bool = False, check_only: bool = False, resume_date: str = "") -> None:
     setup_logging()
     logger = logging.getLogger("pipeline")
     try:
@@ -174,6 +174,11 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
         if limit and set(providers.values()) != {"openrouter"}:
             # A relay reports no request cost, so the ledger could not bound it.
             raise ValueError("PAPERS_BUDGET_USD only supports the openrouter provider")
+        if resume_date and datetime.strptime(resume_date, "%Y-%m-%d").strftime("%Y-%m-%d") != resume_date:
+            raise ValueError("--resume must use YYYY-MM-DD")
+        if resume_date and limit:
+            # The unfinished run already holds this date's ledger, which is never reset.
+            raise ValueError("--resume cannot run under PAPERS_BUDGET_USD")
     except (OSError, ValueError, ArithmeticError) as exc:
         logger.error("Setup failed: %s. See README.md for configuration and environment variables.", exc)
         raise SystemExit(2) from None
@@ -184,7 +189,7 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
     if quick_start:
         maximum = min(maximum, 2) if maximum else 2
         logger.info("Quick start: at most %d new papers; no PDF downloads, DeepResearch, email or git pushes", maximum)
-    date_str = report_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_str = resume_date or report_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     # A timer catch-up or manual duplicate must not create a second paid run.
     summary_path = data_dir / "run-metadata" / f"{date_str}.json"
     if not quick_start and summary_path.is_file():
@@ -195,6 +200,15 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
             logger.info("Daily report for %s already completed; no requests made", date_str)
             return
     summary = {"date": date_str, "query_mode": "submitted-date-utc" if report_date else "announced-rss", "email_sent": False}
+    resume = None
+    if resume_date:
+        try:
+            resume = json.loads((data_dir / "checkpoints" / f"{date_str}.json").read_text(encoding="utf-8"))
+            previous = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            logger.error("Cannot resume %s: %s", date_str, exc)
+            raise SystemExit(2) from None
+        summary.update({key: previous[key] for key in ("query_mode", "candidates") if key in previous}, resumed=True)
     pdf_config = config.get("pdf", {})
     pdf_dir = None
     if not quick_start and pdf_config.get("download_enabled", False):
@@ -224,7 +238,7 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
     budget_token = current_budget.set(budget)
     try:
         await _collect_and_report(config, api_keys, report_date, date_str, maximum, quick_start,
-                                  data_dir, pdf_dir, pdf_config, index_path, index, summary, budget)
+                                  data_dir, pdf_dir, pdf_config, index_path, index, summary, budget, resume)
     finally:
         current_budget.reset(budget_token)
 
@@ -232,22 +246,8 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
 async def _collect_and_report(config: dict, api_keys: dict[str, str], report_date: str, date_str: str,
                               maximum: int, quick_start: bool, data_dir: Path, pdf_dir: Path | None,
                               pdf_config: dict, index_path: Path, index: dict, summary: dict,
-                              budget: RunBudget | None) -> None:
+                              budget: RunBudget | None, resume: dict | None = None) -> None:
     logger = logging.getLogger("pipeline")
-    logger.info("=== Fetching papers ===")
-    candidates = hybrid_fetch(config, report_date or None)
-    summary["candidates"] = len(candidates)
-    if not candidates:
-        save_empty_run(date_str, "no_candidates", config, summary, data_dir)
-        return
-    new_papers = dedup(candidates, index)
-    if maximum:
-        new_papers = new_papers[:maximum]
-    summary["new_papers"] = len(new_papers)
-    if not new_papers:
-        save_empty_run(date_str, "already_indexed", config, summary, data_dir)
-        return
-
     analyses: dict[str, AnalysisResult] = {}
     deep_reports: dict[str, str] = {}
     core_papers: list[ArxivPaper] = []
@@ -255,6 +255,38 @@ async def _collect_and_report(config: dict, api_keys: dict[str, str], report_dat
     budget_stopped = False
     classified = 0
     errors: list[dict] = []
+    if resume is None:
+        logger.info("=== Fetching papers ===")
+        candidates = hybrid_fetch(config, report_date or None)
+        summary["candidates"] = len(candidates)
+        if not candidates:
+            save_empty_run(date_str, "no_candidates", config, summary, data_dir)
+            return
+        new_papers = dedup(candidates, index)
+        if maximum:
+            new_papers = new_papers[:maximum]
+        summary["new_papers"] = len(new_papers)
+        if not new_papers:
+            save_empty_run(date_str, "already_indexed", config, summary, data_dir)
+            return
+    else:
+        # The checkpoint holds every result the unfinished run already produced.
+        # An announced RSS batch cannot be fetched again on a later day, so the
+        # saved candidates are the only way to finish exactly that batch. The
+        # stages below then repeat only what is missing. Checkpoints store
+        # datetimes as text.
+        new_papers = [ArxivPaper(**{**entry, "published": datetime.fromisoformat(entry["published"]),
+                                    "updated": datetime.fromisoformat(entry["updated"])})
+                      for entry in resume["candidates"]]
+        by_id = {paper.arxiv_id: paper for paper in new_papers}
+        core_papers = [by_id[arxiv_id] for arxiv_id in resume["core_ids"]]
+        peripheral_papers = [by_id[arxiv_id] for arxiv_id in resume["peripheral_ids"]]
+        classified = resume["classified"]
+        analyses = {key: AnalysisResult(**value) for key, value in resume["analyses"].items()}
+        deep_reports = dict(resume["deep_research_reports"])
+        summary["new_papers"] = len(new_papers)
+        logger.info("Resuming %s: %d papers, %d classified, %d analyzed, %d deep research",
+                    date_str, len(new_papers), classified, len(analyses), len(deep_reports))
 
     def report_state(stage: str) -> dict:
         return {
@@ -270,16 +302,20 @@ async def _collect_and_report(config: dict, api_keys: dict[str, str], report_dat
         _save_checkpoint(data_dir, date_str, report_state(stage))
 
     checkpoint("fetch_completed")
+    unclassified = new_papers[classified:]
     try:
         if budget is None:
-            core_papers, peripheral_papers = await filter_relevance(new_papers, config["models"]["relevance_filter"], api_keys["relevance_filter"])
+            if unclassified:
+                core, peripheral = await filter_relevance(unclassified, config["models"]["relevance_filter"], api_keys["relevance_filter"])
+                core_papers.extend(core)
+                peripheral_papers.extend(peripheral)
             classified = len(new_papers)
         else:
             # Sequential batches preserve classifications before a budget stop;
             # analysis and PDF research still use their configured concurrency.
             batch_size = config["models"]["relevance_filter"].get("batch_size", 10)
-            for start in range(0, len(new_papers), batch_size):
-                batch = new_papers[start:start + batch_size]
+            for start in range(0, len(unclassified), batch_size):
+                batch = unclassified[start:start + batch_size]
                 core, peripheral = await filter_relevance(batch, config["models"]["relevance_filter"], api_keys["relevance_filter"])
                 core_papers.extend(core)
                 peripheral_papers.extend(peripheral)
@@ -307,8 +343,9 @@ async def _collect_and_report(config: dict, api_keys: dict[str, str], report_dat
             checkpoint("analysis")
 
     if not budget_stopped:
-        results = await asyncio.gather(*(analyze_one(p) for p in all_relevant), return_exceptions=True)
-        for paper, result in zip(all_relevant, results):
+        unanalyzed = [p for p in all_relevant if p.arxiv_id not in analyses]
+        results = await asyncio.gather(*(analyze_one(p) for p in unanalyzed), return_exceptions=True)
+        for paper, result in zip(unanalyzed, results):
             if isinstance(result, BudgetExceeded):
                 budget_stopped = True
             elif isinstance(result, Exception):
@@ -337,8 +374,9 @@ async def _collect_and_report(config: dict, api_keys: dict[str, str], report_dat
                     deep_reports[paper.arxiv_id] = report
                 logger.info("DeepResearch completed %s (%d chars)", paper.arxiv_id, len(report))
                 checkpoint("deep_research")
-        results = await asyncio.gather(*(research_one(p) for p in completed_core), return_exceptions=True)
-        for paper, result in zip(completed_core, results):
+        unresearched = [p for p in completed_core if p.arxiv_id not in deep_reports]
+        results = await asyncio.gather(*(research_one(p) for p in unresearched), return_exceptions=True)
+        for paper, result in zip(unresearched, results):
             if isinstance(result, BudgetExceeded):
                 budget_stopped = True
             elif isinstance(result, Exception):
@@ -403,8 +441,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate an arXiv paper report locally or from a scheduler.")
     parser.add_argument("--check", action="store_true", help="Check local configuration without network requests or file writes")
     parser.add_argument("--quick-start", action="store_true", default=os.environ.get("PAPERS_QUICK_START", "").strip().lower() in ("1", "true", "yes"), help="Process at most two new papers in a separate trial directory without PDFs, DeepResearch, email or git pushes; model API calls still incur charges")
+    parser.add_argument("--resume", metavar="YYYY-MM-DD", default="", help="Finish an unfinished run from its checkpoint: keep its saved results and repeat only the missing classification, analysis and DeepResearch")
     args = parser.parse_args()
-    asyncio.run(run_pipeline(quick_start=args.quick_start, check_only=args.check))
+    asyncio.run(run_pipeline(quick_start=args.quick_start, check_only=args.check, resume_date=args.resume))
 
 
 if __name__ == "__main__":

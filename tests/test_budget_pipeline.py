@@ -177,3 +177,50 @@ def test_partial_pdf_failure_still_saves_readable_results(monkeypatch, tmp_path)
     assert "保存的摘要分析" in (tmp_path / "reports/2026-11-04.html").read_text()
     assert not (tmp_path / "papers_index.json").exists()
     assert (tmp_path / "checkpoints/2026-11-04.json").is_file()
+
+
+def test_resume_repeats_only_missing_deep_research(monkeypatch, tmp_path):
+    config = load_config()
+    config["pdf"]["download_enabled"] = False
+    monkeypatch.setattr(main, "load_config", lambda: config)
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(main, "setup_logging", lambda: None)
+    for key, value in {"OPENROUTER_API_KEY": "test", "MAX_PAPERS": "0", "SKIP_DEEP_RESEARCH": "0",
+                       "SKIP_EMAIL": "1", "SKIP_GIT_PUSH": "1"}.items():
+        monkeypatch.setenv(key, value)
+    for key in ("PAPERS_BUDGET_USD", "REPORT_DATE"):
+        monkeypatch.delenv(key, raising=False)
+    day = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    papers = [ArxivPaper(name, 1, f"Synthetic {name}", "Abstract", [], [], "cs.RO",
+                         day, day, "https://example.test/a.pdf", "https://example.test/a") for name in ("done", "failed")]
+    researched = []
+    async def classify(*args):
+        return papers, []
+    async def analyze(*args):
+        return AnalysisResult(one_line_summary="保存的摘要分析", direction="robotics")
+    async def research(paper, *args, **kwargs):
+        researched.append(paper.arxiv_id)
+        if paper.arxiv_id == "failed" and len(researched) <= 2:
+            raise RuntimeError("model unavailable")
+        return f"{paper.arxiv_id} 的深度解读"
+    def unexpected(*args, **kwargs):
+        raise AssertionError("A resumed run must reuse checkpointed results")
+    monkeypatch.setattr(main, "hybrid_fetch", lambda *args: papers)
+    monkeypatch.setattr(main, "filter_relevance", classify)
+    monkeypatch.setattr(main, "analyze_paper", analyze)
+    monkeypatch.setattr(main, "generate_deep_research", research)
+    monkeypatch.setattr(main, "datetime", type("Frozen", (datetime,), {"now": classmethod(lambda cls, tz=None: day)}))
+    with pytest.raises(SystemExit) as stopped:
+        asyncio.run(main.run_pipeline())
+    assert stopped.value.code == 2 and not (tmp_path / "papers_index.json").exists()
+
+    for name in ("hybrid_fetch", "filter_relevance", "analyze_paper"):
+        monkeypatch.setattr(main, name, unexpected)
+    asyncio.run(main.run_pipeline(resume_date="2026-11-04"))
+    assert researched == ["done", "failed", "failed"]
+    summary = json.loads((tmp_path / "run-metadata/2026-11-04.json").read_text())
+    assert summary["status"] == "completed" and summary["resumed"] is True
+    assert summary["deep_research_completed"] == 2 and summary["query_mode"] == "announced-rss"
+    assert set(json.loads((tmp_path / "papers_index.json").read_text())) >= {"done", "failed"}
+    report = (tmp_path / "reports/2026-11-04.md").read_text()
+    assert "done 的深度解读" in report and "failed 的深度解读" in report
