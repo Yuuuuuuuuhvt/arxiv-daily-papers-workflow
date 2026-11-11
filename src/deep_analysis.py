@@ -120,6 +120,7 @@ async def analyze_paper(
             ],
             temperature=model_config.get("temperature", 0.2),
             api_key=api_key,
+            provider=model_config.get("provider", "openrouter"),
         )
         data = _parse_analysis(raw)
         analysis = _dict_to_analysis(data)

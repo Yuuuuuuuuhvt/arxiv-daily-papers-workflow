@@ -5,7 +5,7 @@
 全自动 arXiv 论文日报系统。每个工作日抓取 Embodied AI 与 VLA、World Models、Autonomous Driving、Agentic AI、Robotics 和 3DGS / 三维重建与仿真场景六个方向的新论文，经 LLM 过滤、分析、解读后生成 Markdown 日报并可选邮件推送。
 
 - **技术栈**: Python 3.11+, asyncio, httpx, Jinja2, PyYAML, feedparser, arxiv
-- **LLM 网关**: OpenRouter (openrouter.ai) — 所有 LLM 调用经此路由
+- **LLM 网关**: 默认经 OpenRouter (openrouter.ai) 路由。每个阶段的 `models.*.provider` 也可以选择 `codex-relay`（OpenAI Responses 协议）或 `gemini-relay`（Anthropic Messages 协议）。
 - **部署**: 独立 Python 命令、Linux systemd 用户服务，以及可选的 GitHub Actions。维护者的生产发布配置位于 `.forgejo/`。
 
 ---
@@ -44,7 +44,8 @@ src/                        # Python package, run via: python -m src.main
   models.py                 # Dataclasses: ArxivPaper, RelevanceResult, AnalysisResult
   fetcher.py                # arXiv API + RSS hybrid fetching
   dedup.py                  # ID-based deduplication against papers_index.json
-  llm_client.py             # OpenRouter API wrapper (retry, backoff, error handling)
+  llm_client.py             # call_llm entry: OpenRouter wrapper (retry, backoff, budget) and relay dispatch
+  relay_client.py           # Responses and Messages request building and SSE parsing for relay providers
   relevance_filter.py       # Batch LLM classification with few-shot examples
   deep_analysis.py          # Per-paper structured analysis (scores, tags, affiliations)
   deep_research.py          # LaTeX+images first, complete PDF-page fallback, input manifests
@@ -98,7 +99,7 @@ data/                       # Runtime data (gitignored, or git submodule)
 
 - **Tunable parameters live in `config/config.yaml`**. `PAPERS_CONFIG` selects an instance-specific YAML file; `PAPERS_DATA_DIR` selects persistent report and index storage. The `--quick-start` preset deliberately caps trials at two candidates and suppresses external side effects other than model calls.
 - **Prompts are plain text files** in `prompts/` — loaded at runtime via `config.load_prompt()`. Edit prompts to adjust LLM behavior without touching code.
-- **Environment variables**: `OPENROUTER_API_KEY` (required), `MAIL_SMTP_HOST`、`MAIL_SMTP_PORT`、`MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM`、`MAIL_TO`，六项齐全时通过 STARTTLS 发信，缺项只跳过邮件, `SKIP_DEEP_RESEARCH` (optional flag).
+- **Environment variables**: `OPENROUTER_API_KEY` (required while a stage uses the `openrouter` provider), `PAPERS_RELEVANCE_FILTER_MODEL` 与 `PAPERS_DEEP_ANALYSIS_MODEL`（可选，格式为 `provider:model_id`，覆盖对应阶段的模型）, `CODEX_RELAY_BASE_URL`、`CODEX_RELAY_API_KEY`、`GEMINI_RELAY_BASE_URL`、`GEMINI_RELAY_API_KEY`（阶段使用对应中转时必填，地址以 `/v1` 结尾）, `MAIL_SMTP_HOST`、`MAIL_SMTP_PORT`、`MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM`、`MAIL_TO`，六项齐全时通过 STARTTLS 发信，缺项只跳过邮件, `SKIP_DEEP_RESEARCH` (optional flag).
 
 ### Templates
 
@@ -169,7 +170,9 @@ pytest tests/ -v
 
 6. **JSON logging format**: All log output is single-line JSON (`ts`, `level`, `stage`, `msg`). Do not use `print()` for debugging — use `logger.info()`.
 
-7. **Windows compatibility**: The project runs on both Windows (PowerShell) and Linux (GitHub Actions). Use `pathlib.Path` for all file paths. Never use hardcoded `/` or `\` separators.
+7. **Relay providers**: 中转不返回请求费用，所以任一阶段使用中转时 `PAPERS_BUDGET_USD` 会在启动检查中被拒绝。中转只接受文本与内联图片，`file` 内容在本地直接报错。Codex 中转拒绝 `temperature` 参数，请求体不发送该字段；Anthropic Messages 协议必须带 `max_tokens`，缺省值见 `relay_client.py`。中转地址属于私有信息，只从环境变量读取，不写入仓库。
+
+8. **Windows compatibility**: The project runs on both Windows (PowerShell) and Linux (GitHub Actions). Use `pathlib.Path` for all file paths. Never use hardcoded `/` or `\` separators.
 
 ---
 

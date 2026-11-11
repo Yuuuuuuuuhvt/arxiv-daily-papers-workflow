@@ -156,6 +156,7 @@ async def filter_relevance(
                 temperature=temperature,
                 max_tokens=max_tokens,
                 api_key=api_key,
+                provider=model_config.get("provider", "openrouter"),
             )
             return _parse_response(raw, expected_ids)
         except BudgetExceeded:

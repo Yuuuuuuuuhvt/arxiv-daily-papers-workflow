@@ -4,6 +4,15 @@ PAPERS_CONFIG=/opt/arxiv-daily-papers/config/config.yaml
 PAPERS_DATA_DIR=/var/lib/arxiv-daily-papers
 OPENROUTER_API_KEY=
 
+# Optional relay providers. Select one per stage as provider:model_id; a relay
+# needs its own key and a base URL ending in /v1, and replaces OpenRouter there.
+# PAPERS_RELEVANCE_FILTER_MODEL=gemini-relay:your-model
+# PAPERS_DEEP_ANALYSIS_MODEL=codex-relay:your-model
+# CODEX_RELAY_BASE_URL=
+# CODEX_RELAY_API_KEY=
+# GEMINI_RELAY_BASE_URL=
+# GEMINI_RELAY_API_KEY=
+
 # Trial mode uses a separate trial directory and never sends email or publishes.
 # Set PAPERS_QUICK_START=0 and SKIP_DEEP_RESEARCH=0 for full analysis.
 PAPERS_QUICK_START=1

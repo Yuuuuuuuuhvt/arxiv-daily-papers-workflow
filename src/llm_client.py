@@ -9,6 +9,7 @@ import logging
 import httpx
 
 from .budget import BudgetExceeded, RunBudget, current_budget, parse_cost
+from .relay_client import relay_completion
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +223,37 @@ async def _stream_completion(
     return content
 
 
+async def _call_relay(
+    provider: str,
+    model: str,
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int | None,
+    api_key: str,
+) -> str:
+    """Retry transport failures, 429 and 5xx on the same schedule as OpenRouter.
+
+    Every attempt opens a new connection, because a relay closes the connection
+    after answering 401 without reading the request body."""
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            async with httpx.AsyncClient(timeout=480) as client:
+                return await relay_completion(
+                    client, provider, model, messages, temperature, max_tokens, api_key
+                )
+        except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+            last_exc = exc
+            if attempt < MAX_RETRIES - 1:
+                wait = BACKOFF_SECONDS[attempt]
+                logger.warning("LLM call failed (attempt %d/%d), retrying in %ds: %s: %s",
+                               attempt + 1, MAX_RETRIES, wait, type(exc).__name__, exc)
+                await asyncio.sleep(wait)
+    logger.error("LLM call failed after %d attempt(s), not retrying: %s: %s",
+                 MAX_RETRIES, type(last_exc).__name__, last_exc)
+    raise RuntimeError(f"LLM call failed after {MAX_RETRIES} attempt(s)") from last_exc
+
+
 async def call_llm(
     model: str,
     messages: list[dict],
@@ -230,7 +262,12 @@ async def call_llm(
     api_key: str = "",
     plugins: list[dict] | None = None,
     stream: bool = False,
+    provider: str = "openrouter",
 ) -> str:
+    if provider != "openrouter":
+        # plugins and stream only describe OpenRouter requests; a relay always
+        # streams and rejects file content while building its request.
+        return await _call_relay(provider, model, messages, temperature, max_tokens, api_key)
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

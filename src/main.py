@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 
 from .budget import BudgetExceeded, RunBudget, current_budget
-from .config import DATA_DIR, ROOT_DIR, load_config, get_env, release_pdf_url
+from .config import DATA_DIR, MODEL_STAGES, ROOT_DIR, load_config, get_env, provider_api_key, release_pdf_url
 from .dedup import dedup, load_index, save_index
 from .deep_analysis import analyze_paper
 from .deep_research import generate_deep_research
@@ -162,7 +162,8 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
     logger = logging.getLogger("pipeline")
     try:
         config = load_config()
-        api_key = get_env("OPENROUTER_API_KEY")
+        providers = {stage: config["models"][stage].get("provider", "openrouter") for stage in MODEL_STAGES}
+        api_keys = {stage: provider_api_key(provider) for stage, provider in providers.items()}
         report_date = resolve_report_date()
         maximum = int(os.environ.get("MAX_PAPERS", "0"))
         if maximum < 0:
@@ -170,6 +171,9 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
         limit = os.environ.get("PAPERS_BUDGET_USD", "").strip()
         if limit and (not Decimal(limit).is_finite() or Decimal(limit) <= 0):
             raise ValueError("PAPERS_BUDGET_USD must be a positive finite amount")
+        if limit and set(providers.values()) != {"openrouter"}:
+            # A relay reports no request cost, so the ledger could not bound it.
+            raise ValueError("PAPERS_BUDGET_USD only supports the openrouter provider")
     except (OSError, ValueError, ArithmeticError) as exc:
         logger.error("Setup failed: %s. See README.md for configuration and environment variables.", exc)
         raise SystemExit(2) from None
@@ -219,13 +223,13 @@ async def run_pipeline(*, quick_start: bool = False, check_only: bool = False) -
     budget = await _load_run_budget(config, data_dir, date_str)
     budget_token = current_budget.set(budget)
     try:
-        await _collect_and_report(config, api_key, report_date, date_str, maximum, quick_start,
+        await _collect_and_report(config, api_keys, report_date, date_str, maximum, quick_start,
                                   data_dir, pdf_dir, pdf_config, index_path, index, summary, budget)
     finally:
         current_budget.reset(budget_token)
 
 
-async def _collect_and_report(config: dict, api_key: str, report_date: str, date_str: str,
+async def _collect_and_report(config: dict, api_keys: dict[str, str], report_date: str, date_str: str,
                               maximum: int, quick_start: bool, data_dir: Path, pdf_dir: Path | None,
                               pdf_config: dict, index_path: Path, index: dict, summary: dict,
                               budget: RunBudget | None) -> None:
@@ -268,7 +272,7 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
     checkpoint("fetch_completed")
     try:
         if budget is None:
-            core_papers, peripheral_papers = await filter_relevance(new_papers, config["models"]["relevance_filter"], api_key)
+            core_papers, peripheral_papers = await filter_relevance(new_papers, config["models"]["relevance_filter"], api_keys["relevance_filter"])
             classified = len(new_papers)
         else:
             # Sequential batches preserve classifications before a budget stop;
@@ -276,7 +280,7 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
             batch_size = config["models"]["relevance_filter"].get("batch_size", 10)
             for start in range(0, len(new_papers), batch_size):
                 batch = new_papers[start:start + batch_size]
-                core, peripheral = await filter_relevance(batch, config["models"]["relevance_filter"], api_key)
+                core, peripheral = await filter_relevance(batch, config["models"]["relevance_filter"], api_keys["relevance_filter"])
                 core_papers.extend(core)
                 peripheral_papers.extend(peripheral)
                 classified += len(batch)
@@ -298,7 +302,7 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
     sem = asyncio.Semaphore(config.get("concurrency", {}).get("max_concurrent_llm", 10))
     async def analyze_one(paper: ArxivPaper) -> None:
         async with sem:
-            analyses[paper.arxiv_id] = await analyze_paper(paper, config["models"]["deep_analysis"], config["scoring"], api_key)
+            analyses[paper.arxiv_id] = await analyze_paper(paper, config["models"]["deep_analysis"], config["scoring"], api_keys["deep_analysis"])
             logger.info("Analysis completed %s", paper.arxiv_id)
             checkpoint("analysis")
 
@@ -325,7 +329,7 @@ async def _collect_and_report(config: dict, api_key: str, report_date: str, date
         sem_pdf = asyncio.Semaphore(config.get("concurrency", {}).get("max_concurrent_pdf", 5))
         async def research_one(paper: ArxivPaper) -> None:
             async with sem_pdf:
-                report = await generate_deep_research(paper, config["models"]["deep_analysis"], api_key,
+                report = await generate_deep_research(paper, config["models"]["deep_analysis"], api_keys["deep_analysis"],
                     pdf_config=pdf_config if pdf_config.get("download_enabled") else None,
                     source_config={"storage_dir": str(data_dir / "paper-inputs"),
                                    **config.get("paper_input", {})})

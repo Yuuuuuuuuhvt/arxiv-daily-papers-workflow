@@ -64,6 +64,7 @@ Fetch API and RSS -> Dedup -> Relevance Filter -> Deep Analysis -> PDF Download
 - Runtime configuration defaults to `config/config.yaml`. `PAPERS_CONFIG` selects a separate instance YAML file containing arXiv categories, research directions, model IDs, scoring weights, email settings, concurrency, PDF settings, and hjfy link settings.
 - Prompt text lives in `prompts/` and is loaded with `config.load_prompt()`. Change LLM behavior through prompt files and model settings before changing Python code.
 - The OpenRouter client is centralized in `src/llm_client.py`. It retries 429 and 5xx or transport failures three times with 2, 4, and 8 second backoff.
+- `models.*.provider` selects `openrouter`, `codex-relay` or `gemini-relay` per stage; `PAPERS_RELEVANCE_FILTER_MODEL` and `PAPERS_DEEP_ANALYSIS_MODEL` override a stage as `provider:model_id`. Relay requests live in `src/relay_client.py`, read their base URL and key from the environment, and cannot run under `PAPERS_BUDGET_USD`.
 - Data models are dataclasses in `src/models.py`. Keep dependencies minimal and avoid adding Pydantic unless the project direction changes.
 
 ### Data layout

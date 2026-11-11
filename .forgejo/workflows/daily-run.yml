@@ -24,7 +24,12 @@ jobs:
     timeout-minutes: 180
     env:
       FORGEJO_PAPERS_TOKEN: ${{ secrets.PAPERS_WRITE_TOKEN }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PAPERS_RELEVANCE_FILTER_MODEL: gemini-relay:gemini-3.8-flash-high
+      PAPERS_DEEP_ANALYSIS_MODEL: codex-relay:gpt-6-astra
+      CODEX_RELAY_BASE_URL: ${{ secrets.CODEX_RELAY_BASE_URL }}
+      CODEX_RELAY_API_KEY: ${{ secrets.CODEX_RELAY_API_KEY }}
+      GEMINI_RELAY_BASE_URL: ${{ secrets.GEMINI_RELAY_BASE_URL }}
+      GEMINI_RELAY_API_KEY: ${{ secrets.GEMINI_RELAY_API_KEY }}
       MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
       MAIL_SMTP_PORT: ${{ secrets.MAIL_SMTP_PORT }}
       MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}

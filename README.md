@@ -80,7 +80,10 @@ Set `paper_input.prefer_latex: false` to use the previous PDF mode: files up to 
 
 | Variable | Purpose and default |
 | --- | --- |
-| `OPENROUTER_API_KEY` | Required for collection and `--check` |
+| `OPENROUTER_API_KEY` | Required for collection and `--check` while a stage uses the default `openrouter` provider |
+| `PAPERS_RELEVANCE_FILTER_MODEL`, `PAPERS_DEEP_ANALYSIS_MODEL` | Optional `provider:model_id` override for one stage, replacing `models.*` in the YAML file |
+| `CODEX_RELAY_BASE_URL`, `CODEX_RELAY_API_KEY` | Required by stages using the `codex-relay` provider |
+| `GEMINI_RELAY_BASE_URL`, `GEMINI_RELAY_API_KEY` | Required by stages using the `gemini-relay` provider |
 | `PAPERS_CONFIG` | YAML file; defaults to the checkout's `config/config.yaml` |
 | `PAPERS_DATA_DIR` | Report and index directory; defaults to the checkout's `data` directory |
 | `PAPERS_WEB_REPORTS` | Set to `1` for HTTP reading with per-paper detail loading; default keeps standalone HTML |
@@ -95,6 +98,8 @@ Set `paper_input.prefer_latex: false` to use the previous PDF mode: files up to 
 | `PDF_RELEASE_BASE_URL` | Optional repository URL for externally published PDF attachments; unset means no release links |
 
 Relative `PAPERS_CONFIG` and `PAPERS_DATA_DIR` paths resolve from the process working directory. Use absolute paths for a scheduled service. PDF downloads use the separate `pdf.storage_dir` YAML setting, which resolves relative paths from the code checkout; use an absolute path to place PDFs on another disk.
+
+Each stage under `models` names a `provider`. `openrouter` is the default and the only provider with cost accounting. `codex-relay` sends OpenAI Responses requests and `gemini-relay` sends Anthropic Messages requests to a relay you operate; both base URLs end in `/v1`. A relay reports no request cost, so `PAPERS_BUDGET_USD` is refused when any stage uses one. A relay receives papers as text and inline images only: keep `paper_input.prefer_latex` enabled, because the legacy native PDF input exists only on OpenRouter and otherwise falls back to the abstract. The Codex relay does not accept a temperature, so that setting is ignored there.
 
 Real collection prepares the output directories and checks that they can be written before making network requests. The read-only `--check` command intentionally does not create these directories.
 

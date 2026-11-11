@@ -97,6 +97,7 @@ async def _research_source_images(paper: ArxivPaper, model_config: dict, api_key
                    "\n正文文件、图片引用和图注需要联合阅读。区分原文事实与推断，不能将图片路径或图注当作已经看过图像。"},
                   {"role": "user", "content": content}],
         temperature=model_config.get("temperature", 0.2), api_key=api_key, stream=True,
+        provider=model_config.get("provider", "openrouter"),
     )
     manifest["status"] = "response_received"
     _save_input_manifest(manifest_path, manifest)
@@ -200,6 +201,7 @@ async def generate_deep_research(
             ],
             temperature=model_config.get("temperature", 0.2),
             api_key=api_key,
+            provider=model_config.get("provider", "openrouter"),
             stream=True,
         )
         return f"> 输入依据：PDF 全部页面提取的正文，未直接输入图像像素。\n\n{report.strip()}"
@@ -231,6 +233,7 @@ async def generate_deep_research(
             ],
             temperature=model_config.get("temperature", 0.2),
             api_key=api_key,
+            provider=model_config.get("provider", "openrouter"),
             plugins=plugins,
         )
         return f"> 输入依据：PDF 原文，包含图表输入。\n\n{report.strip()}"
@@ -257,6 +260,7 @@ async def _call_text_only(
             ],
             temperature=model_config.get("temperature", 0.2),
             api_key=api_key,
+            provider=model_config.get("provider", "openrouter"),
         )
         return f"> 输入依据：仅论文摘要，尚未完成 PDF 全文解读。\n\n{report.strip()}"
     except BudgetExceeded:

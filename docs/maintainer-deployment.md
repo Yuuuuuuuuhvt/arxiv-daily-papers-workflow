@@ -10,6 +10,13 @@ The `PAPERS_WRITE_TOKEN` secret supplies `FORGEJO_PAPERS_TOKEN`, which grants wr
 data push and submodule pointer push all use Forgejo. The retained GitHub workflow
 stays disabled during migration.
 
+`.forgejo/workflows/daily-run.yml` 用 `PAPERS_RELEVANCE_FILTER_MODEL` 为筛选阶段选择提供方与模型，
+用 `PAPERS_DEEP_ANALYSIS_MODEL` 为结构化分析与深度解读选择提供方与模型，格式为 `provider:model_id`。
+`codex-relay` 与 `gemini-relay` 两个提供方的地址和密钥来自四个 Forgejo Actions secrets：
+`CODEX_RELAY_BASE_URL`、`CODEX_RELAY_API_KEY`、`GEMINI_RELAY_BASE_URL`、`GEMINI_RELAY_API_KEY`，
+地址以 `/v1` 结尾。更换模型只需要修改工作流中的这两个变量。
+这两个提供方不返回请求费用，生产作业不设置 `PAPERS_BUDGET_USD`。
+
 生产邮件使用上表的六个 Forgejo Actions secrets，来源为 recitativo 的
 `secret/mail/eai-papers.env`。任一变量缺失时仅跳过邮件，采集、报告、PDF 发布和数据更新继续执行。
 `SKIP_EMAIL=1` 显式禁用邮件。无效端口、TLS、认证或发送失败会记录错误并令
