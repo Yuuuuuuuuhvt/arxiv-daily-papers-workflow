@@ -138,6 +138,12 @@ def test_report_index_preserves_empty_days_and_recent_papers(tmp_path):
     assert 'class="entry" href="2026-11-05.html"' in page
     assert 'class="entry-secondary" href="2026-11-06.html"' in page
     assert (reports / '2026-11-08.html').read_text() == '<html>report 2026-11-08</html>'
+    assert (reports / 'latest.html').read_text() == '<html>report 2026-11-05</html>'
+
+    # Without any day that has papers, latest.html falls back to the newest visible report.
+    only_empty = tmp_path / 'only-empty'
+    reports, _ = write_days(only_empty, {'2026-11-06': {'status': 'no_candidates', 'analyzed': 0}})
+    save_report_index(only_empty)
     assert (reports / 'latest.html').read_text() == '<html>report 2026-11-06</html>'
 
     empty_root = tmp_path / 'empty'

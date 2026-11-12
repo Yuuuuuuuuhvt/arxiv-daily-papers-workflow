@@ -200,17 +200,21 @@ def save_report_index(data_dir: Path | None = None) -> Path:
                       "status_label": labels.get(summary.get("status"), "缺少运行记录"),
                       "analyzed": analyzed if type(analyzed) is int and analyzed >= 0 else None,
                       "deep_completed": deep_completed if type(deep_completed) is int and deep_completed >= 0 else None})
+    latest_with_papers = next((item for item in items if item["analyzed"]), None)
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
     content = env.get_template("report_index.html.j2").render(
         favicon_url=os.environ.get("PAPERS_FAVICON_URL", ""),
         items=items, latest=items[0] if items else None,
-        latest_with_papers=next((item for item in items if item["analyzed"]), None),
+        latest_with_papers=latest_with_papers,
         generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     )
-    # save_html_report points latest.html at the newest date even when that date is a hidden empty
-    # weekend, so the stable entry is re-synced here to the newest visible report, or to this index.
+    # save_html_report points latest.html at the newest date even when that day has no papers, for
+    # example when arXiv skips an announcement. The stable entry is re-synced here to the newest
+    # report with papers, matching the index's main entry; only when no day has papers does it fall
+    # back to the newest visible report, or to this index.
+    primary = latest_with_papers or (items[0] if items else None)
     _write_text_atomic(reports_dir / "latest.html",
-                (reports_dir / items[0]["url"]).read_text(encoding="utf-8") if items else content)
+                (reports_dir / primary["url"]).read_text(encoding="utf-8") if primary else content)
     path = reports_dir / "index.html"
     _write_text_atomic(path, content)
     return path
