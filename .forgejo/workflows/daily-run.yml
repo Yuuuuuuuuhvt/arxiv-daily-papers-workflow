@@ -37,7 +37,6 @@ jobs:
       REPORT_DATE: ${{ inputs.report_date }}
       VALIDATION: ${{ inputs.validation }}
       SKIP_EMAIL: ${{ inputs.skip_email && '1' || '0' }}
-      GITHUB_RELEASE_SYNC_TOKEN: ${{ secrets.GH_RELEASE_SYNC_TOKEN }}
       SKIP_GIT_PUSH: '1'
       PDF_RELEASE_BASE_URL: https://git.luonto.me/yurun/arxiv-daily-papers-workflow
     steps:

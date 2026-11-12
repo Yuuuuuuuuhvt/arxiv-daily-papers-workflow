@@ -12,10 +12,10 @@ stays disabled during migration.
 
 `.forgejo/workflows/daily-run.yml` 用 `PAPERS_RELEVANCE_FILTER_MODEL` 为筛选阶段选择提供方与模型，
 用 `PAPERS_DEEP_ANALYSIS_MODEL` 为结构化分析与深度解读选择提供方与模型，格式为 `provider:model_id`。
-两个阶段都使用 `gemini-relay` 提供方，地址和密钥来自两个 Forgejo Actions secrets：
-`GEMINI_RELAY_BASE_URL`、`GEMINI_RELAY_API_KEY`，地址以 `/v1` 结尾。
-更换模型只需要修改工作流中的这两个变量；改用 `codex-relay` 时还需要
-`CODEX_RELAY_BASE_URL` 与 `CODEX_RELAY_API_KEY`。
+生产作业的两个阶段都使用 `gemini-relay:gemini-3.8-flash-high`，不再使用 `codex-relay`。
+`gemini-relay` 的地址和密钥来自 Forgejo Actions secrets `GEMINI_RELAY_BASE_URL` 与
+`GEMINI_RELAY_API_KEY`，地址以 `/v1` 结尾。更换模型只需要修改工作流中的这两个变量；
+改回 `codex-relay` 时需要同时在工作流中补回 `CODEX_RELAY_BASE_URL` 与 `CODEX_RELAY_API_KEY`。
 中转不返回请求费用，生产作业不设置 `PAPERS_BUDGET_USD`。
 
 生产邮件使用上表的六个 Forgejo Actions secrets，来源为 recitativo 的
@@ -46,8 +46,8 @@ analysis in an isolated job checkout before production scheduling is accepted.
 Historical collection selects the first UTC submission date and analyzes the
 currently available arXiv version. It does not reconstruct past RSS entries or
 past versions. Backfill uses skip_email to prevent delayed notification bursts.
-PDF attachments are verified against existing files and published to both
-Forgejo and the GitHub fallback before production data commits.
+PDF attachments are verified against existing files and published to Forgejo
+before production data commits. Releases are no longer mirrored to GitHub.
 
 
 ## 日报邮件独立验证
