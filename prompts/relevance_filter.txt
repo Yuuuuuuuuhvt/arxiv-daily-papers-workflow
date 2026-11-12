@@ -5,7 +5,8 @@ Assign each paper one tier: core, peripheral, or not_relevant.
 
 ### Embodied AI and VLA: embodied_ai
 Vision-language-action models, robot foundation models, VLM/LLM-based embodied
-perception, planning and control, and generalizable learned action policies.
+perception, planning and control, vision-language navigation (VLN), and
+generalizable learned action policies.
 Use this label when the main contribution is a foundation-model-based embodied
 system. A robotics paper without that emphasis can instead use robotics.
 

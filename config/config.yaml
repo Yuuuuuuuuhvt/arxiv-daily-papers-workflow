@@ -18,6 +18,9 @@ research_directions:
       - "dexterous hand"
       - "VLA"
       - "vision-language-action"
+      - "VLN"
+      - "vision-language navigation"
+      - "vision-and-language navigation"
     abstract_keywords:
       - "embodied manipulation"
       - "embodied navigation"
@@ -26,6 +29,9 @@ research_directions:
       - "interactive perception"
       - "vision-language-action"
       - "dexterous manipulation"
+      - "VLN"
+      - "vision-language navigation"
+      - "vision-and-language navigation"
     abstract_combos:
       - ["robot", "policy learning"]
       - ["manipulation", "foundation model"]
@@ -34,6 +40,11 @@ research_directions:
       - ["humanoid", "locomotion"]
       - ["VLA", "robot"]
       - ["VLA", "manipulation"]
+      - ["navigation", "vision-language model"]
+      - ["navigation", "language instruction"]
+      - ["navigation", "language instructions"]
+      - ["navigation", "instruction following"]
+      - ["navigation", "embodied agent"]
     categories:
       - "cs.RO"
       - "cs.AI"
@@ -352,6 +363,8 @@ research_focus:
     - "coding agent"
     - "robotics"
     - "robot navigation"
+    - "vision-language navigation"
+    - "VLN"
     - "SLAM"
     - "robot control"
     - "tactile sensing"
