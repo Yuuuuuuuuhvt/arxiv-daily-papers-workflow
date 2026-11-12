@@ -25,13 +25,13 @@ class ReleaseTests(unittest.TestCase):
             class Opener:
                 def open(self, request, timeout):
                     return io.BytesIO(json.dumps([{'id': 1, 'tag_name': 'v2026-10-09', 'assets': [{'name': 'one.pdf', 'digest': 'sha256:wrong'}]}]).encode())
-            env = {'REPORT_DATE': '2026-10-09', 'FORGEJO_PAPERS_TOKEN': 'test', 'GITHUB_RELEASE_SYNC_TOKEN': 'test'}
+            env = {'REPORT_DATE': '2026-10-09', 'FORGEJO_PAPERS_TOKEN': 'test'}
             with patch.dict(os.environ, env), patch.object(release, 'ROOT_DIR', root), patch.object(release.urllib.request, 'build_opener', return_value=Opener()), patch.object(release.subprocess, 'run') as upload:
                 with self.assertRaisesRegex(RuntimeError, 'Existing PDF differs'):
                     release.publish_pdfs()
                 upload.assert_not_called()
 
-    def test_fallback_failure_keeps_primary_draft(self):
+    def test_publish_failure_is_reported(self):
         calls = []
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -45,9 +45,9 @@ class ReleaseTests(unittest.TestCase):
                     if request.get_method() == 'PATCH':
                         raise urllib.error.HTTPError(request.full_url, 503, 'unavailable', {}, None)
                     return io.BytesIO(json.dumps([{'id': 1, 'tag_name': 'v2026-10-09', 'draft': True, 'assets': [{'name': 'one.pdf', 'digest': 'sha256:' + release.digest(pdf)}]}]).encode())
-            env = {'REPORT_DATE': '2026-10-09', 'FORGEJO_PAPERS_TOKEN': 'test', 'GITHUB_RELEASE_SYNC_TOKEN': 'test'}
+            env = {'REPORT_DATE': '2026-10-09', 'FORGEJO_PAPERS_TOKEN': 'test'}
             with patch.dict(os.environ, env), patch.object(release, 'ROOT_DIR', root), patch.object(release.urllib.request, 'build_opener', return_value=Opener()):
                 with self.assertRaises(urllib.error.HTTPError):
                     release.publish_pdfs()
             patches = [url for url, method in calls if method == 'PATCH']
-            self.assertEqual(patches, [release.GITHUB + '/repos/Yuuuuuuuuhvt/arxiv-daily-papers-workflow/releases/1'])
+            self.assertEqual(patches, [release.FORGEJO + '/api/v1/repos/yurun/arxiv-daily-papers-workflow/releases/1'])

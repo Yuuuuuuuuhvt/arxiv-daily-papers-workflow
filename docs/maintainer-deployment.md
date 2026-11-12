@@ -45,8 +45,8 @@ analysis in an isolated job checkout before production scheduling is accepted.
 Historical collection selects the first UTC submission date and analyzes the
 currently available arXiv version. It does not reconstruct past RSS entries or
 past versions. Backfill uses skip_email to prevent delayed notification bursts.
-PDF attachments are verified against existing files and published to both
-Forgejo and the GitHub fallback before production data commits.
+PDF attachments are verified against existing files and published to Forgejo
+before production data commits. Releases are no longer mirrored to GitHub.
 
 
 ## 日报邮件独立验证
